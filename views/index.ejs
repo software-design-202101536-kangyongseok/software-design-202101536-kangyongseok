@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <h1>Error: <%= error %></h1>
+  <% } else { %>
+    <h1>Welcome, <%= username %>!</h1>
+    <p>Age: <%= age %></p>
+    <p>Bio: <%= bio %></p>
+    <p>Here are your favorite subjects:</p>
+    <ul>
+      <% subjects.forEach(function(subject) { %>
+        <li><%= subject %></li>
+      <% }); %>
+    </ul>
+    <div class="tab-buttons" style="margin-bottom: 12px;">
+      <button type="button" id="gradesTabBtn" class="tab-btn active">성적</button>
+      <button type="button" id="attendanceTabBtn" class="tab-btn">출석</button>
+    </div>
+
+    <div id="gradesSection" class="tab-section">
+      <h2>Grades</h2>
+      <div>
+        <span>과목 선택: </span>
+        <a href="/students?name=<%= username %>" class="subject-filter <%= selectedSubject === '' ? 'active' : '' %>" style="margin-right:8px;">전체</a>
+        <% subjects.forEach(function(subject) { %>
+          <a href="/students?name=<%= username %>&subject=<%= encodeURIComponent(subject) %>" class="subject-filter <%= selectedSubject === subject ? 'active' : '' %>" style="margin-right:8px;"><%= subject %></a>
+        <% }); %>
+      </div>
+
+    <table border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>연도</th>
+          <th>학기</th>
+          <th>과목</th>
+          <th>성적</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% grades.forEach(function(grade) { %>
+          <tr>
+            <td style="text-align:center;"><%= grade.year %></td>
+            <td style="text-align:center;"><%= grade.term %></td>
+            <td style="text-align:center;"><%= grade.subject %></td>
+            <td style="text-align:center;"><%= grade.score %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <% if (selectedSubject) { %>
+      <h3><%= selectedSubject %> 과목 전체 평균 성적: <%= subjectAverage %></h3>
+    <% } else { %>
+      <h3>학기별 평균 성적</h3>
+      <table border="1" style="width:100%; margin-top:10px; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th>연도</th>
+            <th>학기</th>
+            <th>평균</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% termAverages.forEach(function(item) { %>
+            <tr>
+              <td style="text-align:center;"><%= item.year %></td>
+              <td style="text-align:center;"><%= item.term %></td>
+              <td style="text-align:center;"><%= item.average %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <h2>Add Grade</h2>
+    <form action="/students/grades" method="post">
+      <input type="hidden" name="studentId" value="<%= studentId %>">
+      <input type="hidden" name="studentName" value="<%= studentName %>">
+      <label>Subject: 
+        <select name="subject" required>
+          <% subjects.forEach(function(subject) { %>
+            <option value="<%= subject %>"><%= subject %></option>
+          <% }); %>
+        </select>
+      </label><br>
+      <label>Year: <input type="number" name="year" min="2000" max="2100" required></label><br>
+      <label>Term: 
+        <select name="term" required>
+          <option value="1">1학기</option>
+          <option value="2">2학기</option>
+          <option value="여름">여름</option>
+          <option value="겨울">겨울</option>
+        </select>
+      </label><br>
+      <label>Score: <input type="number" name="score" min="0" max="100" required></label><br>
+      <input type="submit" value="Add Grade">
+    </form>
+    </div>
+
+    <div id="attendanceSection" class="tab-section" style="display:none;">
+      <h2>Attendance Summary</h2>
+      <table border="1">
+        <tr>
+          <th>Present Days</th>
+          <td><%= presentCount %></td>
+        </tr>
+      <tr>
+        <th>Absent Days</th>
+        <td><%= absentCount %></td>
+      </tr>
+    </table>
+
+    <h2>Absent Dates</h2>
+    <ul>
+      <% absentDates.forEach(function(date) { %>
+        <li><%= new Date(date).toDateString() %></li>
+      <% }); %>
+    </ul>
+    <h2>Add Attendance</h2>
+    <form action="/students/attendances" method="post">
+      <input type="hidden" name="studentId" value="<%= studentId %>">
+      <input type="hidden" name="studentName" value="<%= studentName %>">
+      <label>Date: <input type="date" name="date" required></label><br>
+      <label>Status: 
+        <select name="status" required>
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="late">Late</option>
+        </select>
+      </label><br>
+      <input type="submit" value="Add Attendance">
+    </form>
+    </div>
+    <br>
+    <a href="/" style="display:inline-block; padding: 8px 16px; background:#3498db; color:#fff; border-radius:4px; text-decoration:none;">초기 페이지로 돌아가기</a>
+
+    <script>
+      const gradesBtn = document.getElementById('gradesTabBtn');
+      const attendanceBtn = document.getElementById('attendanceTabBtn');
+      const gradesSection = document.getElementById('gradesSection');
+      const attendanceSection = document.getElementById('attendanceSection');
+
+      function showGrades() {
+        gradesSection.style.display = 'block';
+        attendanceSection.style.display = 'none';
+        gradesBtn.classList.add('active');
+        attendanceBtn.classList.remove('active');
+      }
+
+      function showAttendance() {
+        gradesSection.style.display = 'none';
+        attendanceSection.style.display = 'block';
+        attendanceBtn.classList.add('active');
+        gradesBtn.classList.remove('active');
+      }
+
+      gradesBtn.addEventListener('click', showGrades);
+      attendanceBtn.addEventListener('click', showAttendance);
+    </script>
+  <% } %>
+</body>
+</html>
