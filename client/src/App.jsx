@@ -89,9 +89,14 @@ function App() {
 
     if (activeTab === 'search') {
       if (user.userType === 'student' || user.userType === 'parent') {
+<<<<<<< HEAD
         // 학생이나 학부모는 본인 정보 자동 검색 및 자동 표시
         setStudentName(user.username)
         fetchStudent(user.username, true)
+=======
+        // 학생이나 학부모는 본인 정보 자동 검색
+        fetchStudent(user.username)
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
       } else {
         fetchAllStudents()
       }
@@ -207,6 +212,7 @@ function App() {
     }
   }
 
+<<<<<<< HEAD
   const resetSessionState = () => {
     setActiveTab('search')
     setStudentName('')
@@ -230,6 +236,9 @@ function App() {
   }
 
   const fetchStudent = async (name = studentName, showModal = false) => {
+=======
+  const fetchStudent = async (name = studentName) => {
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
     const searchName = name || studentName
     if (!searchName || !searchName.trim()) {
       setError('Please enter a student name')
@@ -239,7 +248,10 @@ function App() {
     setLoading(true)
     setError('')
     setStudentData(null)
+<<<<<<< HEAD
     setShowStudentModal(false)
+=======
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
     
     try {
       const response = await fetch(`http://localhost:3000/students?name=${encodeURIComponent(searchName)}&subject=${encodeURIComponent(subjectFilter)}`)
@@ -255,7 +267,10 @@ function App() {
       const data = await response.json()
       setStudentData(data)
       setError('')
+<<<<<<< HEAD
       setShowStudentModal(showModal)
+=======
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
       
       // Fetch all students for ranking
       fetchAllStudents()
@@ -583,7 +598,10 @@ function App() {
   }
 
   const handleLogin = (userData) => {
+<<<<<<< HEAD
     resetSessionState()
+=======
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
     setUser(userData)
     setIsLoggedIn(true)
   }
@@ -598,7 +616,11 @@ function App() {
         <h1 style={{ textAlign: 'center', color: '#333' }}>Student Management System</h1>
         <div>
           <span style={{ marginRight: '10px' }}>환영합니다, {user.username} ({user.userType === 'teacher' ? '교사' : user.userType === 'student' ? '학생' : '학부모'})</span>
+<<<<<<< HEAD
           <button onClick={() => { resetSessionState(); setIsLoggedIn(false); setUser(null); }} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>로그아웃</button>
+=======
+          <button onClick={() => { setIsLoggedIn(false); setUser(null); }} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>로그아웃</button>
+>>>>>>> d449abc640714da98cfec9e982634348250e3920
         </div>
       </div>
       <nav style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
