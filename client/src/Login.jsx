@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Login.css'
+const API_URL = ''
 
 function Login({ onLogin }) {
   const [userType, setUserType] = useState('teacher')
@@ -9,7 +10,7 @@ function Login({ onLogin }) {
 
   const fetchStudents = async () => {
     try {
-      const response = await fetch('http://localhost:3000/students/all')
+      const response = await fetch(`${API_URL}/students/all`)
       if (response.ok) {
         const data = await response.json()
         setStudents(data)

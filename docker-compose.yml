@@ -1,4 +1,28 @@
 services:
+  frontend:
+    build: 
+      context: ./client
+    container_name: frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    build: 
+      context: ./server
+    container_name: backend
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+    depends_on:
+      - mongo
+    restart: always
+
+
+#DB
   mongo:
     image: mongo:latest
     container_name: mongo-container

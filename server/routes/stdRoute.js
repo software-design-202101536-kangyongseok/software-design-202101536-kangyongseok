@@ -5,7 +5,7 @@ const Grade = require("../models/grade");
 const Attendance = require("../models/attendance");
 const Subject = require("../models/subject");
 const User = require("../models/user");
-
+const Feedback = require("../models/feedback");
 // 입력 검증 함수들
 const validateStudentData = (data) => {
   const errors = [];
@@ -508,6 +508,157 @@ stdRouter.post("/register-user", async (req, res) => {
   } catch (err) {
     console.error('User registration error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+// ==================== Feedback Routes ====================
+
+// GET /students/:studentId/feedbacks - 특정 학생의 피드백 조회
+stdRouter.get("/:studentId/feedbacks", async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    // studentId 유효성 검사
+    if (!studentId || studentId.length !== 24) {
+      return res.status(400).json({ message: 'Invalid student ID' });
+    }
+    
+    const feedbacks = await Feedback.find({ studentId })
+      .sort({ createdAt: -1 });
+    
+    res.status(200).json(feedbacks);
+  } catch (err) {
+    console.error('Error fetching feedbacks:', err);
+    res.status(500).json({ 
+      message: err.message || 'Failed to fetch feedbacks' 
+    });
+  }
+});
+
+// POST /students/feedbacks - 피드백 등록
+stdRouter.post("/feedbacks", async (req, res) => {
+  try {
+    const { 
+      studentId, 
+      teacherName,
+      academicPerformance, 
+      attendance, 
+      behavior, 
+      attitude, 
+      additionalComments 
+    } = req.body;
+
+    // 필수 입력 검증
+    if (!studentId) {
+      return res.status(400).json({ message: 'Student ID is required' });
+    }
+    
+    if (!teacherName || !teacherName.trim()) {
+      return res.status(400).json({ message: 'Teacher name is required' });
+    }
+
+    // 학생 존재 여부 확인
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // 최소 한 가지 항목은 입력되어야 함
+    if (!academicPerformance && !attendance && !behavior && !attitude && !additionalComments) {
+      return res.status(400).json({ 
+        message: 'At least one feedback field is required' 
+      });
+    }
+
+    const feedback = new Feedback({
+      studentId,
+      teacherName: teacherName.trim(),
+      academicPerformance: academicPerformance ? academicPerformance.trim() : '',
+      attendance: attendance ? attendance.trim() : '',
+      behavior: behavior ? behavior.trim() : '',
+      attitude: attitude ? attitude.trim() : '',
+      additionalComments: additionalComments ? additionalComments.trim() : ''
+    });
+
+    const newFeedback = await feedback.save();
+    res.status(201).json({ 
+      message: 'Feedback added successfully',
+      feedback: newFeedback 
+    });
+  } catch (err) {
+    console.error('Error creating feedback:', err);
+    res.status(400).json({ 
+      message: err.message || 'Failed to create feedback' 
+    });
+  }
+});
+
+// PUT /students/feedbacks/:feedbackId - 피드백 수정 (선택사항)
+stdRouter.put("/feedbacks/:feedbackId", async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+    const { 
+      academicPerformance, 
+      attendance, 
+      behavior, 
+      attitude, 
+      additionalComments 
+    } = req.body;
+    
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+    
+    // 최소 한 가지 항목은 입력되어야 함
+    if (!academicPerformance && !attendance && !behavior && !attitude && !additionalComments) {
+      return res.status(400).json({ 
+        message: 'At least one feedback field is required' 
+      });
+    }
+    
+    const updatedFeedback = await Feedback.findByIdAndUpdate(
+      feedbackId,
+      {
+        academicPerformance: academicPerformance ? academicPerformance.trim() : '',
+        attendance: attendance ? attendance.trim() : '',
+        behavior: behavior ? behavior.trim() : '',
+        attitude: attitude ? attitude.trim() : '',
+        additionalComments: additionalComments ? additionalComments.trim() : ''
+      },
+      { new: true, runValidators: true }
+    );
+    
+    res.status(200).json({ 
+      message: 'Feedback updated successfully',
+      feedback: updatedFeedback 
+    });
+  } catch (err) {
+    console.error('Error updating feedback:', err);
+    res.status(400).json({ 
+      message: err.message || 'Failed to update feedback' 
+    });
+  }
+});
+
+// DELETE /students/feedbacks/:feedbackId - 피드백 삭제 (선택사항)
+stdRouter.delete("/feedbacks/:feedbackId", async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+    
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+    
+    await Feedback.findByIdAndDelete(feedbackId);
+    res.status(200).json({ 
+      message: 'Feedback deleted successfully' 
+    });
+  } catch (err) {
+    console.error('Error deleting feedback:', err);
+    res.status(500).json({ 
+      message: err.message || 'Failed to delete feedback' 
+    });
   }
 });
 
