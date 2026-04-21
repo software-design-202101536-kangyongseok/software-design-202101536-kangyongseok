@@ -15,6 +15,10 @@ const feedbackSchema = new mongoose.Schema({
   behavior: String,
   attitude: String,
   additionalComments: String,
+  shareWithTeachers: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

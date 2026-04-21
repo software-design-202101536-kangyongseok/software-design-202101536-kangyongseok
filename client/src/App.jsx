@@ -87,17 +87,24 @@ function App() {
     attendance: '',            // 출결
     behavior: '',             // 행동
     attitude: '',             // 태도
-    additionalComments: ''    // 추가 의견
+    additionalComments: '',    // 추가 의견
+    shareWithTeachers: false   // 다른 교사와 공유 여부
   })
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [studentFeedbacks, setStudentFeedbacks] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false)
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsError, setNotificationsError] = useState('')
 
 
 
   // 피드백 불러오기
   const fetchFeedbacks = async (studentId) => {
     try {
-      const response = await fetch(`${API_URL}/students/${studentId}/feedbacks`)
+      const viewerParams = user ? `?viewerType=${encodeURIComponent(user.userType)}&viewerName=${encodeURIComponent(user.username)}` : ''
+      const response = await fetch(`${API_URL}/students/${studentId}/feedbacks${viewerParams}`)
       if (!response.ok) {
         throw new Error('Failed to fetch feedbacks')
       }
@@ -106,6 +113,79 @@ function App() {
     } catch (err) {
       console.error('Error fetching feedbacks:', err)
       setStudentFeedbacks([])
+    }
+  }
+
+  const fetchNotifications = async () => {
+    if (!user || (user.userType !== 'student' && user.userType !== 'parent')) return
+
+    const studentId = user.studentId || studentData?.studentId
+    if (!studentId) return
+
+    setNotificationsLoading(true)
+    setNotificationsError('')
+
+    try {
+      const queryParams = new URLSearchParams()
+      queryParams.append('viewerType', user.userType)
+      queryParams.append('studentId', studentId)
+      if (user.userType === 'student') {
+        queryParams.append('viewerName', user.username)
+      }
+
+      const response = await fetch(`${API_URL}/students/notifications?${queryParams.toString()}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications')
+      }
+
+      const data = await response.json()
+      setNotifications(data)
+      setUnreadNotifications(data.filter(notification => !notification.read).length)
+      return data
+    } catch (err) {
+      console.error('Error fetching notifications:', err)
+      setNotifications([])
+      setUnreadNotifications(0)
+      setNotificationsError(err.message)
+      return []
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+
+  const markNotificationsRead = async () => {
+    if (!user) return
+    const studentId = user.studentId || studentData?.studentId
+    if (!studentId) return
+
+    try {
+      const queryParams = new URLSearchParams()
+      queryParams.append('viewerType', user.userType)
+      queryParams.append('studentId', studentId)
+      if (user.userType === 'student') {
+        queryParams.append('viewerName', user.username)
+      }
+
+      const response = await fetch(`${API_URL}/students/notifications/mark-all-read?${queryParams.toString()}`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to mark notifications as read')
+      }
+
+      setNotifications(prev => prev.map(notification => ({ ...notification, read: true })))
+      setUnreadNotifications(0)
+    } catch (err) {
+      console.error('Error marking notifications read:', err)
+    }
+  }
+
+  const handleNotificationsClick = async () => {
+    const notificationsData = await fetchNotifications()
+    setShowNotificationsModal(true)
+    if (notificationsData.some(notification => !notification.read)) {
+      await markNotificationsRead()
     }
   }
 
@@ -142,6 +222,7 @@ function App() {
           behavior: feedbackData.behavior.trim(),
           attitude: feedbackData.attitude.trim(),
           additionalComments: feedbackData.additionalComments.trim(),
+          shareWithTeachers: feedbackData.shareWithTeachers,
           teacherName: user.username
         })
       })
@@ -158,7 +239,8 @@ function App() {
         attendance: '',
         behavior: '',
         attitude: '',
-        additionalComments: ''
+        additionalComments: '',
+        shareWithTeachers: false
       })
 
       try {
@@ -183,10 +265,10 @@ function App() {
 
   // 피드백 폼 변경
   const handleFeedbackChange = (e) => {
-    const { name, value } = e.target
+    const { name, value, type, checked } = e.target
     setFeedbackData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }))
   }
 
@@ -199,16 +281,29 @@ function App() {
     fetchSubjects() // Always fetch subjects for register/edit
 
     if (activeTab === 'search') {
-      if (user.userType === 'student' || user.userType === 'parent') {
-        // 학생이나 학부모는 본인 정보 자동 검색 및 자동 표시
+      if (user.userType === 'student') {
+        // 학생은 본인 정보 자동 검색 및 표시
         setStudentName(user.username)
         fetchStudent(user.username, true)
+      } else if (user.userType === 'parent') {
+        // 학부모는 연결된 자녀 정보 자동 검색 및 표시
+        if (user.studentName) {
+          setStudentName(user.studentName)
+          fetchStudent(user.studentName, true)
+        }
       } else {
         fetchAllStudents()
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user])
+
+  useEffect(() => {
+    if (!user || (user.userType !== 'student' && user.userType !== 'parent')) return
+    
+    fetchNotifications()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, studentData?.studentId])
 
   const validateBirthDate = (birthDate) => {
     if (!birthDate) return 'Birth date is required'
@@ -334,6 +429,7 @@ function App() {
     setShowAttendanceModal(false)
     setShowEditModal(false)
     setShowFeedbackModal(false)
+    setShowNotificationsModal(false)
     setStudentFeedbacks([])
     setFeedbackData({
       studentId: '',
@@ -341,8 +437,13 @@ function App() {
       attendance: '',
       behavior: '',
       attitude: '',
-      additionalComments: ''
+      additionalComments: '',
+      shareWithTeachers: false
     })
+    setNotifications([])
+    setUnreadNotifications(0)
+    setNotificationsLoading(false)
+    setNotificationsError('')
     setFormData({ name: '', birthDate: '', gender: '', subject: [], bio: '' })
     setGradeData({ subject: '', score: '', year: new Date().getFullYear(), term: 1 })
     setAttendanceData({ date: new Date().toISOString().split('T')[0], status: 'present' })
@@ -724,8 +825,35 @@ function App() {
     <div className="App" style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ textAlign: 'center', color: '#333' }}>Student Management System</h1>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ marginRight: '10px' }}>환영합니다, {user.username} ({user.userType === 'teacher' ? '교사' : user.userType === 'student' ? '학생' : '학부모'})</span>
+          {(user.userType === 'student' || user.userType === 'parent') && (
+            <button
+              onClick={handleNotificationsClick}
+              style={{
+                position: 'relative',
+                padding: '5px 12px',
+                backgroundColor: '#1976D2',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              알림
+              {unreadNotifications > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '4px',
+                  width: '10px',
+                  height: '10px',
+                  backgroundColor: '#f44336',
+                  borderRadius: '50%'
+                }} />
+              )}
+            </button>
+          )}
           <button onClick={() => { resetSessionState(); setIsLoggedIn(false); setUser(null); }} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>로그아웃</button>
         </div>
       </div>
@@ -970,6 +1098,9 @@ function App() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '2px solid #e0e0e0', paddingBottom: '8px' }}>
                             <strong style={{ color: '#673AB7' }}>작성자: {feedback.teacherName}</strong>
                             <span style={{ color: '#666', fontSize: '14px' }}>{new Date(feedback.createdAt).toLocaleDateString('ko-KR')}</span>
+                          </div>
+                          <div style={{ marginBottom: '10px', fontSize: '14px', color: '#555' }}>
+                            <strong>공유 여부:</strong> {feedback.shareWithTeachers ? '다른 교사와 공유됨' : '다른 교사와 공유되지 않음'}
                           </div>
                           {feedback.academicPerformance && (
                             <div style={{ marginBottom: '8px' }}>
@@ -1329,6 +1460,18 @@ function App() {
                   rows="3"
                 />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#333' }}>
+                  <input
+                    type="checkbox"
+                    name="shareWithTeachers"
+                    checked={feedbackData.shareWithTeachers}
+                    onChange={handleFeedbackChange}
+                  />
+                  다른 교사와 공유합니다
+                </label>
+              </div>
+              <p style={{ margin: '0', color: '#666', fontSize: '13px' }}>학생과 학부모에게는 항상 공유됩니다.</p>
               <button 
                 type="submit" 
                 disabled={loading}
@@ -1347,6 +1490,34 @@ function App() {
             </form>
             {success && <p style={{ color: '#388e3c', marginTop: '10px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>{success}</p>}
             {error && <p style={{ color: 'red', marginTop: '10px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>{error}</p>}
+          </div>
+        </div>
+      )}
+
+      {showNotificationsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+          <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setShowNotificationsModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <h3>알림</h3>
+            {notificationsLoading ? (
+              <p>알림을 불러오는 중입니다...</p>
+            ) : notificationsError ? (
+              <p style={{ color: 'red' }}>{notificationsError}</p>
+            ) : notifications.length === 0 ? (
+              <p>새로운 알림이 없습니다.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {notifications.map(notification => (
+                  <div key={notification._id} style={{ padding: '14px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: notification.read ? '#fff' : '#fff8e1' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <strong style={{ fontSize: '15px' }}>{notification.type === 'grade' ? '성적 알림' : '피드백 알림'}</strong>
+                      <span style={{ fontSize: '12px', color: '#666' }}>{new Date(notification.createdAt).toLocaleString('ko-KR')}</span>
+                    </div>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{notification.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -55,17 +55,29 @@ function Login({ onLogin }) {
         }
         mockUser = {
           username: student.name,
-          userType: 'student'
+          userType: 'student',
+          studentId: student._id
         }
         break
       }
-      case 'parent':
+      case 'parent': {
+        if (!selectedStudent) {
+          setError('학생을 선택해주세요.')
+          return
+        }
+        const studentForParent = students.find(s => s.name === selectedStudent)
+        if (!studentForParent) {
+          setError('선택된 학생을 찾을 수 없습니다.')
+          return
+        }
         mockUser = {
           username: 'parent1',
           userType: 'parent',
-          studentId: '1' // 연결된 학생 ID
+          studentId: studentForParent._id,
+          studentName: studentForParent.name
         }
         break
+      }
       default:
         setError('잘못된 사용자 유형입니다.')
         return
@@ -89,7 +101,7 @@ function Login({ onLogin }) {
             </select>
           </div>
           
-          {userType === 'student' && (
+          {(userType === 'student' || userType === 'parent') && (
             <div className="form-group">
               <label>학생 선택:</label>
               <select 
@@ -97,7 +109,7 @@ function Login({ onLogin }) {
                 onChange={(e) => setSelectedStudent(e.target.value)}
               >
                 {students.map(student => (
-                  <option key={student.studentId} value={student.name}>
+                  <option key={student.studentId || student.name} value={student.name}>
                     {student.name}
                   </option>
                 ))}

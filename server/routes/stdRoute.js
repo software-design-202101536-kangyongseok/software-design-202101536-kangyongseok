@@ -6,6 +6,7 @@ const Attendance = require("../models/attendance");
 const Subject = require("../models/subject");
 const User = require("../models/user");
 const Feedback = require("../models/feedback");
+const Notification = require("../models/notification");
 // 입력 검증 함수들
 const validateStudentData = (data) => {
   const errors = [];
@@ -206,6 +207,7 @@ stdRouter.get("/all", async (req, res) => {
     const studentsWithGrades = students.map(student => {
       const studentGrades = allGrades.filter(grade => grade.student.toString() === student._id.toString());
       return {
+        _id: student._id,
         name: student.name,
         subject: student.subject,
         grades: studentGrades
@@ -343,12 +345,34 @@ stdRouter.post("/grades", async (req, res) => {
     if (!term || (term !== 1 && term !== 2)) {
       return res.status(400).json({ message: 'Term must be 1 or 2' });
     }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
     
     const grade = await Grade.findOneAndUpdate(
       { student: studentId, subject: subject.toString().trim(), year: Number(year), term: Number(term) },
       { student: studentId, subject: subject.toString().trim(), year: Number(year), term: Number(term), score: Number(score) },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
+
+    const notificationMessage = `${student.name} 학생의 ${subject.toString().trim()} ${year}학기 ${term}차 성적이 ${score}점으로 등록되었습니다.`;
+    await Notification.create({
+      studentId,
+      recipientType: 'student',
+      recipientName: student.name,
+      message: notificationMessage,
+      type: 'grade',
+      relatedData: { subject: subject.toString().trim(), score: Number(score), year: Number(year), term: Number(term) }
+    });
+    await Notification.create({
+      studentId,
+      recipientType: 'parent',
+      message: notificationMessage,
+      type: 'grade',
+      relatedData: { subject: subject.toString().trim(), score: Number(score), year: Number(year), term: Number(term) }
+    });
 
     res.status(200).json({ 
       message: 'Grade added successfully',
@@ -516,13 +540,25 @@ stdRouter.post("/register-user", async (req, res) => {
 stdRouter.get("/:studentId/feedbacks", async (req, res) => {
   try {
     const { studentId } = req.params;
+    const { viewerType, viewerName } = req.query;
     
     // studentId 유효성 검사
     if (!studentId || studentId.length !== 24) {
       return res.status(400).json({ message: 'Invalid student ID' });
     }
-    
-    const feedbacks = await Feedback.find({ studentId })
+
+    let filter = { studentId };
+    if (viewerType === 'teacher' && viewerName) {
+      filter = {
+        studentId,
+        $or: [
+          { shareWithTeachers: true },
+          { teacherName: viewerName }
+        ]
+      };
+    }
+
+    const feedbacks = await Feedback.find(filter)
       .sort({ createdAt: -1 });
     
     res.status(200).json(feedbacks);
@@ -544,7 +580,8 @@ stdRouter.post("/feedbacks", async (req, res) => {
       attendance, 
       behavior, 
       attitude, 
-      additionalComments 
+      additionalComments,
+      shareWithTeachers 
     } = req.body;
 
     // 필수 입력 검증
@@ -576,10 +613,29 @@ stdRouter.post("/feedbacks", async (req, res) => {
       attendance: attendance ? attendance.trim() : '',
       behavior: behavior ? behavior.trim() : '',
       attitude: attitude ? attitude.trim() : '',
-      additionalComments: additionalComments ? additionalComments.trim() : ''
+      additionalComments: additionalComments ? additionalComments.trim() : '',
+      shareWithTeachers: !!shareWithTeachers
     });
 
     const newFeedback = await feedback.save();
+
+    const notificationMessage = `${student.name} 학생에 대한 새로운 피드백이 등록되었습니다.`;
+    await Notification.create({
+      studentId,
+      recipientType: 'student',
+      recipientName: student.name,
+      message: notificationMessage,
+      type: 'feedback',
+      relatedData: { teacherName: teacherName.trim(), feedbackId: newFeedback._id }
+    });
+    await Notification.create({
+      studentId,
+      recipientType: 'parent',
+      message: notificationMessage,
+      type: 'feedback',
+      relatedData: { teacherName: teacherName.trim(), feedbackId: newFeedback._id }
+    });
+
     res.status(201).json({ 
       message: 'Feedback added successfully',
       feedback: newFeedback 
@@ -589,6 +645,62 @@ stdRouter.post("/feedbacks", async (req, res) => {
     res.status(400).json({ 
       message: err.message || 'Failed to create feedback' 
     });
+  }
+});
+
+// GET /notifications - 특정 학생/학부모의 알림 조회
+stdRouter.get("/notifications", async (req, res) => {
+  try {
+    const { viewerType, viewerName, studentId } = req.query;
+    if (!viewerType || !studentId) {
+      return res.status(400).json({ message: 'viewerType and studentId are required' });
+    }
+
+    let filter;
+    if (viewerType === 'student') {
+      if (!viewerName) {
+        return res.status(400).json({ message: 'viewerName is required for student notifications' });
+      }
+      filter = { studentId, recipientType: 'student', recipientName: viewerName };
+    } else if (viewerType === 'parent') {
+      filter = { studentId, recipientType: 'parent' };
+    } else {
+      return res.status(400).json({ message: 'Unsupported viewer type for notifications' });
+    }
+
+    const notifications = await Notification.find(filter).sort({ createdAt: -1 });
+    res.status(200).json(notifications);
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ message: err.message || 'Failed to fetch notifications' });
+  }
+});
+
+// POST /notifications/mark-all-read - 알림을 모두 읽음 처리
+stdRouter.post("/notifications/mark-all-read", async (req, res) => {
+  try {
+    const { viewerType, viewerName, studentId } = req.query;
+    if (!viewerType || !studentId) {
+      return res.status(400).json({ message: 'viewerType and studentId are required' });
+    }
+
+    let filter;
+    if (viewerType === 'student') {
+      if (!viewerName) {
+        return res.status(400).json({ message: 'viewerName is required for student notifications' });
+      }
+      filter = { studentId, recipientType: 'student', recipientName: viewerName };
+    } else if (viewerType === 'parent') {
+      filter = { studentId, recipientType: 'parent' };
+    } else {
+      return res.status(400).json({ message: 'Unsupported viewer type for notifications' });
+    }
+
+    await Notification.updateMany(filter, { read: true });
+    res.status(200).json({ message: 'Notifications marked read' });
+  } catch (err) {
+    console.error('Error marking notifications read:', err);
+    res.status(500).json({ message: err.message || 'Failed to mark notifications read' });
   }
 });
 
