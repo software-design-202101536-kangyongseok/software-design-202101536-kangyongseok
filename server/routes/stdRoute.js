@@ -95,30 +95,30 @@ const validateDate = (value) => {
 const validateStudentData = (data) => {
   const errors = [];
   
-  if (!data.name || !data.name.toString().trim()) {
+  if (!data.name?.toString().trim()) {
     errors.push('Student name is required');
   } else if (data.name.toString().trim().length < 2) {
     errors.push('Student name must be at least 2 characters');
   }
   
-  if (!data.birthDate) {
-    errors.push('Birth date is required');
-  } else {
+  if (data.birthDate) {
     const birthDate = new Date(data.birthDate);
     if (Number.isNaN(birthDate.getTime())) {
       errors.push('Birth date must be a valid date');
     }
+  } else {
+    errors.push('Birth date is required');
   }
   
   if (!data.gender || !['male', 'female'].includes(data.gender)) {
     errors.push('Gender is required and must be male or female');
   }
   
-  if (!data.subject || !data.subject.toString().trim()) {
+  if (!data.subject?.toString().trim()) {
     errors.push('Subject is required');
   }
   
-  if (!data.bio || !data.bio.toString().trim()) {
+  if (!data.bio?.toString().trim()) {
     errors.push('Biography is required');
   }
   
@@ -128,7 +128,7 @@ const validateStudentData = (data) => {
 stdRouter.get("/", async (req, res) => {
   try {
     const studentName = req.query.name;
-    if (!studentName || !studentName.trim()) {
+    if (!studentName?.trim()) {
       return res.status(400).json({ message: 'Student name is required' });
     }
 
