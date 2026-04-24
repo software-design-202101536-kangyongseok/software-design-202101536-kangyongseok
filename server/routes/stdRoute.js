@@ -1,5 +1,6 @@
 const express = require("express");
 const stdRouter = express.Router();
+const mongoose = require("mongoose");
 const Student = require("../models/student");
 const Grade = require("../models/grade");
 const Attendance = require("../models/attendance");
@@ -7,7 +8,90 @@ const Subject = require("../models/subject");
 const User = require("../models/user");
 const Feedback = require("../models/feedback");
 const Notification = require("../models/notification");
-// 입력 검증 함수들
+
+// ==================== Input Validation Utilities ====================
+/**
+ * Validate MongoDB ObjectId format
+ */
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id);
+};
+
+/**
+ * Validate and sanitize string input
+ */
+const validateString = (value, minLength = 1, maxLength = 500) => {
+  if (!value) return { valid: false, error: 'Value is required' };
+  const trimmed = String(value).trim();
+  if (trimmed.length < minLength) {
+    return { valid: false, error: `Value must be at least ${minLength} character(s)` };
+  }
+  if (trimmed.length > maxLength) {
+    return { valid: false, error: `Value must not exceed ${maxLength} character(s)` };
+  }
+  return { valid: true, value: trimmed };
+};
+
+/**
+ * Validate numeric input within range
+ */
+const validateNumber = (value, min = 0, max = 100) => {
+  const num = Number(value);
+  if (isNaN(num)) {
+    return { valid: false, error: 'Value must be a number' };
+  }
+  if (num < min || num > max) {
+    return { valid: false, error: `Value must be between ${min} and ${max}` };
+  }
+  return { valid: true, value: num };
+};
+
+/**
+ * Validate year
+ */
+const validateYear = (value) => {
+  const num = Number(value);
+  const currentYear = new Date().getFullYear();
+  if (isNaN(num) || num < 1900 || num > currentYear) {
+    return { valid: false, error: 'Year is invalid' };
+  }
+  return { valid: true, value: num };
+};
+
+/**
+ * Validate term (1 or 2)
+ */
+const validateTerm = (value) => {
+  const num = Number(value);
+  if (isNaN(num) || (num !== 1 && num !== 2)) {
+    return { valid: false, error: 'Term must be 1 or 2' };
+  }
+  return { valid: true, value: num };
+};
+
+/**
+ * Validate enum value
+ */
+const validateEnum = (value, allowedValues) => {
+  const trimmed = String(value).trim();
+  if (!allowedValues.includes(trimmed)) {
+    return { valid: false, error: `Value must be one of: ${allowedValues.join(', ')}` };
+  }
+  return { valid: true, value: trimmed };
+};
+
+/**
+ * Validate date format
+ */
+const validateDate = (value) => {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) {
+    return { valid: false, error: 'Invalid date format' };
+  }
+  return { valid: true, value: date };
+};
+
+// ==================== Original Validation Functions ====================
 const validateStudentData = (data) => {
   const errors = [];
   
@@ -330,48 +414,84 @@ stdRouter.post("/grades", async (req, res) => {
   try {
     const { studentId, subject, score, year, term } = req.body;
     
-    if (!studentId) {
-      return res.status(400).json({ message: 'Student ID is required' });
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
     }
-    if (!subject || !subject.toString().trim()) {
-      return res.status(400).json({ message: 'Subject is required' });
+    
+    // Validate subject
+    const subjectValidation = validateString(subject, 1, 100);
+    if (!subjectValidation.valid) {
+      return res.status(400).json({ message: `Subject: ${subjectValidation.error}` });
     }
-    if (isNaN(score) || score < 0 || score > 100) {
-      return res.status(400).json({ message: 'Score must be between 0 and 100' });
+    
+    // Validate score
+    const scoreValidation = validateNumber(score, 0, 100);
+    if (!scoreValidation.valid) {
+      return res.status(400).json({ message: `Score: ${scoreValidation.error}` });
     }
-    if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
-      return res.status(400).json({ message: 'Year is invalid' });
+    
+    // Validate year
+    const yearValidation = validateYear(year);
+    if (!yearValidation.valid) {
+      return res.status(400).json({ message: yearValidation.error });
     }
-    if (!term || (term !== 1 && term !== 2)) {
-      return res.status(400).json({ message: 'Term must be 1 or 2' });
+    
+    // Validate term
+    const termValidation = validateTerm(term);
+    if (!termValidation.valid) {
+      return res.status(400).json({ message: termValidation.error });
     }
 
+    // Check if student exists
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
     
+    // Use validated values in query
     const grade = await Grade.findOneAndUpdate(
-      { student: studentId, subject: subject.toString().trim(), year: Number(year), term: Number(term) },
-      { student: studentId, subject: subject.toString().trim(), year: Number(year), term: Number(term), score: Number(score) },
+      { 
+        student: mongoose.Types.ObjectId(studentId), 
+        subject: subjectValidation.value, 
+        year: yearValidation.value, 
+        term: termValidation.value 
+      },
+      { 
+        student: mongoose.Types.ObjectId(studentId), 
+        subject: subjectValidation.value, 
+        year: yearValidation.value, 
+        term: termValidation.value, 
+        score: scoreValidation.value 
+      },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
 
-    const notificationMessage = `${student.name} 학생의 ${subject.toString().trim()} ${year}학기 ${term}차 성적이 ${score}점으로 등록되었습니다.`;
+    const notificationMessage = `${student.name} 학생의 ${subjectValidation.value} ${yearValidation.value}학기 ${termValidation.value}차 성적이 ${scoreValidation.value}점으로 등록되었습니다.`;
     await Notification.create({
-      studentId,
+      studentId: mongoose.Types.ObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
       message: notificationMessage,
       type: 'grade',
-      relatedData: { subject: subject.toString().trim(), score: Number(score), year: Number(year), term: Number(term) }
+      relatedData: { 
+        subject: subjectValidation.value, 
+        score: scoreValidation.value, 
+        year: yearValidation.value, 
+        term: termValidation.value 
+      }
     });
     await Notification.create({
-      studentId,
+      studentId: mongoose.Types.ObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
       type: 'grade',
-      relatedData: { subject: subject.toString().trim(), score: Number(score), year: Number(year), term: Number(term) }
+      relatedData: { 
+        subject: subjectValidation.value, 
+        score: scoreValidation.value, 
+        year: yearValidation.value, 
+        term: termValidation.value 
+      }
     });
 
     res.status(200).json({ 
@@ -390,29 +510,30 @@ stdRouter.post("/attendances", async (req, res) => {
   try {
     const { studentId, date, status } = req.body;
     
-    if (!studentId) {
-      return res.status(400).json({ message: 'Student ID is required' });
-    }
-    if (!date) {
-      return res.status(400).json({ message: 'Date is required' });
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
     }
     
+    // Validate date
+    const dateValidation = validateDate(date);
+    if (!dateValidation.valid) {
+      return res.status(400).json({ message: dateValidation.error });
+    }
+    
+    // Validate status
     const validStatuses = ['present', 'absent', 'late'];
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({ 
-        message: `Status must be one of: ${validStatuses.join(', ')}` 
-      });
+    const statusValidation = validateEnum(status, validStatuses);
+    if (!statusValidation.valid) {
+      return res.status(400).json({ message: statusValidation.error });
     }
     
-    const normalizedDate = new Date(date);
-    if (isNaN(normalizedDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid date format' });
-    }
+    const normalizedDate = new Date(dateValidation.value);
     normalizedDate.setHours(0, 0, 0, 0);
 
     const attendance = await Attendance.findOneAndUpdate(
-      { student: studentId, date: normalizedDate },
-      { status: status, date: normalizedDate },
+      { student: mongoose.Types.ObjectId(studentId), date: normalizedDate },
+      { status: statusValidation.value, date: normalizedDate },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
 
@@ -542,20 +663,35 @@ stdRouter.get("/:studentId/feedbacks", async (req, res) => {
     const { studentId } = req.params;
     const { viewerType, viewerName } = req.query;
     
-    // studentId 유효성 검사
-    if (!studentId || studentId.length !== 24) {
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
       return res.status(400).json({ message: 'Invalid student ID' });
     }
 
-    let filter = { studentId };
-    if (viewerType === 'teacher' && viewerName) {
-      filter = {
-        studentId,
-        $or: [
-          { shareWithTeachers: true },
-          { teacherName: viewerName }
-        ]
-      };
+    let filter = { studentId: mongoose.Types.ObjectId(studentId) };
+    
+    if (viewerType) {
+      // Validate viewerType
+      const viewerTypeValidation = validateEnum(viewerType, ['teacher', 'student', 'parent']);
+      if (!viewerTypeValidation.valid) {
+        return res.status(400).json({ message: viewerTypeValidation.error });
+      }
+      
+      if (viewerTypeValidation.value === 'teacher' && viewerName) {
+        // Validate viewerName
+        const viewerNameValidation = validateString(viewerName, 1, 100);
+        if (!viewerNameValidation.valid) {
+          return res.status(400).json({ message: `Viewer name: ${viewerNameValidation.error}` });
+        }
+        
+        filter = {
+          studentId: mongoose.Types.ObjectId(studentId),
+          $or: [
+            { shareWithTeachers: true },
+            { teacherName: viewerNameValidation.value }
+          ]
+        };
+      }
     }
 
     const feedbacks = await Feedback.find(filter)
@@ -584,13 +720,15 @@ stdRouter.post("/feedbacks", async (req, res) => {
       shareWithTeachers 
     } = req.body;
 
-    // 필수 입력 검증
-    if (!studentId) {
-      return res.status(400).json({ message: 'Student ID is required' });
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
     }
     
-    if (!teacherName || !teacherName.trim()) {
-      return res.status(400).json({ message: 'Teacher name is required' });
+    // Validate teacherName
+    const teacherNameValidation = validateString(teacherName, 1, 100);
+    if (!teacherNameValidation.valid) {
+      return res.status(400).json({ message: `Teacher name: ${teacherNameValidation.error}` });
     }
 
     // 학생 존재 여부 확인
@@ -607,13 +745,13 @@ stdRouter.post("/feedbacks", async (req, res) => {
     }
 
     const feedback = new Feedback({
-      studentId,
-      teacherName: teacherName.trim(),
-      academicPerformance: academicPerformance ? academicPerformance.trim() : '',
-      attendance: attendance ? attendance.trim() : '',
-      behavior: behavior ? behavior.trim() : '',
-      attitude: attitude ? attitude.trim() : '',
-      additionalComments: additionalComments ? additionalComments.trim() : '',
+      studentId: mongoose.Types.ObjectId(studentId),
+      teacherName: teacherNameValidation.value,
+      academicPerformance: academicPerformance ? String(academicPerformance).trim() : '',
+      attendance: attendance ? String(attendance).trim() : '',
+      behavior: behavior ? String(behavior).trim() : '',
+      attitude: attitude ? String(attitude).trim() : '',
+      additionalComments: additionalComments ? String(additionalComments).trim() : '',
       shareWithTeachers: !!shareWithTeachers
     });
 
@@ -621,19 +759,19 @@ stdRouter.post("/feedbacks", async (req, res) => {
 
     const notificationMessage = `${student.name} 학생에 대한 새로운 피드백이 등록되었습니다.`;
     await Notification.create({
-      studentId,
+      studentId: mongoose.Types.ObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
       message: notificationMessage,
       type: 'feedback',
-      relatedData: { teacherName: teacherName.trim(), feedbackId: newFeedback._id }
+      relatedData: { teacherName: teacherNameValidation.value, feedbackId: newFeedback._id }
     });
     await Notification.create({
-      studentId,
+      studentId: mongoose.Types.ObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
       type: 'feedback',
-      relatedData: { teacherName: teacherName.trim(), feedbackId: newFeedback._id }
+      relatedData: { teacherName: teacherNameValidation.value, feedbackId: newFeedback._id }
     });
 
     res.status(201).json({ 
@@ -652,20 +790,37 @@ stdRouter.post("/feedbacks", async (req, res) => {
 stdRouter.get("/notifications", async (req, res) => {
   try {
     const { viewerType, viewerName, studentId } = req.query;
+    
+    // Validate required parameters
     if (!viewerType || !studentId) {
       return res.status(400).json({ message: 'viewerType and studentId are required' });
     }
 
+    // Validate studentId
+    if (!isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Invalid student ID' });
+    }
+
+    // Validate viewerType
+    const validViewerTypes = ['student', 'parent'];
+    const viewerTypeValidation = validateEnum(viewerType, validViewerTypes);
+    if (!viewerTypeValidation.valid) {
+      return res.status(400).json({ message: viewerTypeValidation.error });
+    }
+
     let filter;
-    if (viewerType === 'student') {
+    if (viewerTypeValidation.value === 'student') {
       if (!viewerName) {
         return res.status(400).json({ message: 'viewerName is required for student notifications' });
       }
-      filter = { studentId, recipientType: 'student', recipientName: viewerName };
-    } else if (viewerType === 'parent') {
-      filter = { studentId, recipientType: 'parent' };
+      // Validate viewerName
+      const viewerNameValidation = validateString(viewerName, 1, 100);
+      if (!viewerNameValidation.valid) {
+        return res.status(400).json({ message: `Viewer name: ${viewerNameValidation.error}` });
+      }
+      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'student', recipientName: viewerNameValidation.value };
     } else {
-      return res.status(400).json({ message: 'Unsupported viewer type for notifications' });
+      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'parent' };
     }
 
     const notifications = await Notification.find(filter).sort({ createdAt: -1 });
@@ -680,20 +835,37 @@ stdRouter.get("/notifications", async (req, res) => {
 stdRouter.post("/notifications/mark-all-read", async (req, res) => {
   try {
     const { viewerType, viewerName, studentId } = req.query;
+    
+    // Validate required parameters
     if (!viewerType || !studentId) {
       return res.status(400).json({ message: 'viewerType and studentId are required' });
     }
 
+    // Validate studentId
+    if (!isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Invalid student ID' });
+    }
+
+    // Validate viewerType
+    const validViewerTypes = ['student', 'parent'];
+    const viewerTypeValidation = validateEnum(viewerType, validViewerTypes);
+    if (!viewerTypeValidation.valid) {
+      return res.status(400).json({ message: viewerTypeValidation.error });
+    }
+
     let filter;
-    if (viewerType === 'student') {
+    if (viewerTypeValidation.value === 'student') {
       if (!viewerName) {
         return res.status(400).json({ message: 'viewerName is required for student notifications' });
       }
-      filter = { studentId, recipientType: 'student', recipientName: viewerName };
-    } else if (viewerType === 'parent') {
-      filter = { studentId, recipientType: 'parent' };
+      // Validate viewerName
+      const viewerNameValidation = validateString(viewerName, 1, 100);
+      if (!viewerNameValidation.valid) {
+        return res.status(400).json({ message: `Viewer name: ${viewerNameValidation.error}` });
+      }
+      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'student', recipientName: viewerNameValidation.value };
     } else {
-      return res.status(400).json({ message: 'Unsupported viewer type for notifications' });
+      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'parent' };
     }
 
     await Notification.updateMany(filter, { read: true });
@@ -716,6 +888,11 @@ stdRouter.put("/feedbacks/:feedbackId", async (req, res) => {
       additionalComments 
     } = req.body;
     
+    // Validate feedbackId
+    if (!feedbackId || !isValidObjectId(feedbackId)) {
+      return res.status(400).json({ message: 'Invalid feedback ID' });
+    }
+    
     const feedback = await Feedback.findById(feedbackId);
     if (!feedback) {
       return res.status(404).json({ message: 'Feedback not found' });
@@ -731,11 +908,11 @@ stdRouter.put("/feedbacks/:feedbackId", async (req, res) => {
     const updatedFeedback = await Feedback.findByIdAndUpdate(
       feedbackId,
       {
-        academicPerformance: academicPerformance ? academicPerformance.trim() : '',
-        attendance: attendance ? attendance.trim() : '',
-        behavior: behavior ? behavior.trim() : '',
-        attitude: attitude ? attitude.trim() : '',
-        additionalComments: additionalComments ? additionalComments.trim() : ''
+        academicPerformance: academicPerformance ? String(academicPerformance).trim() : '',
+        attendance: attendance ? String(attendance).trim() : '',
+        behavior: behavior ? String(behavior).trim() : '',
+        attitude: attitude ? String(attitude).trim() : '',
+        additionalComments: additionalComments ? String(additionalComments).trim() : ''
       },
       { new: true, runValidators: true }
     );
@@ -756,6 +933,11 @@ stdRouter.put("/feedbacks/:feedbackId", async (req, res) => {
 stdRouter.delete("/feedbacks/:feedbackId", async (req, res) => {
   try {
     const { feedbackId } = req.params;
+    
+    // Validate feedbackId
+    if (!feedbackId || !isValidObjectId(feedbackId)) {
+      return res.status(400).json({ message: 'Invalid feedback ID' });
+    }
     
     const feedback = await Feedback.findById(feedbackId);
     if (!feedback) {
