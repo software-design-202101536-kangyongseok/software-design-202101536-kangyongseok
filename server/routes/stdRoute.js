@@ -125,6 +125,135 @@ const validateStudentData = (data) => {
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+// ==================== Helper Functions ====================
+
+/**
+ * Convert string to MongoDB ObjectId
+ */
+const convertToObjectId = (value) => {
+  return mongoose.Types.ObjectId(value);
+};
+
+/**
+ * Build student response data with grades and attendance processing
+ */
+const buildStudentResponse = async (student, subjectFilter) => {
+  let grades = await Grade.find({ student: student._id }).sort({ year: -1, term: 1 });
+  if (subjectFilter) {
+    grades = grades.filter(grade => grade.subject === subjectFilter);
+  }
+
+  const termAggregates = {};
+  grades.forEach(grade => {
+    const key = `${grade.year}-${grade.term}`;
+    if (!termAggregates[key]) {
+      termAggregates[key] = { year: grade.year, term: grade.term, total: 0, count: 0 };
+    }
+    termAggregates[key].total += grade.score;
+    termAggregates[key].count += 1;
+  });
+
+  const termAverages = Object.values(termAggregates).map(item => ({
+    year: item.year,
+    term: item.term,
+    average: item.count ? (item.total / item.count).toFixed(2) : '0.00'
+  }));
+
+  let subjectAverage = null;
+  if (subjectFilter) {
+    const totalScore = grades.reduce((sum, g) => sum + g.score, 0);
+    const countScore = grades.length;
+    subjectAverage = countScore ? (totalScore / countScore).toFixed(2) : '0.00';
+  }
+
+  const attendances = await Attendance.find({ student: student._id });
+  let presentCount = 0;
+  let absentCount = 0;
+  const absentDates = [];
+  attendances.forEach(att => {
+    if (att.status === 'present' || att.status === 'late') presentCount++;
+    if (att.status === 'absent') {
+      absentCount++;
+      absentDates.push(att.date);
+    }
+  });
+
+  return {
+    username: student.name,
+    birthDate: student.birthDate,
+    gender: student.gender,
+    subjects: student.subject,
+    bio: student.bio,
+    grades: grades,
+    attendances: attendances,
+    studentId: student._id,
+    studentName: student.name,
+    presentCount: presentCount,
+    absentCount: absentCount,
+    absentDates: absentDates,
+    selectedSubject: subjectFilter || "",
+    termAverages: termAverages,
+    subjectAverage: subjectAverage,
+  };
+};
+
+/**
+ * Build notification filter based on viewer type
+ */
+const buildNotificationFilter = (viewerType, viewerName, studentId) => {
+  if (viewerType === 'student') {
+    return {
+      studentId: convertToObjectId(studentId),
+      recipientType: 'student',
+      recipientName: viewerName
+    };
+  } else {
+    return {
+      studentId: convertToObjectId(studentId),
+      recipientType: 'parent'
+    };
+  }
+};
+
+/**
+ * Validate notification parameters and build filter
+ */
+const validateAndBuildNotificationFilter = (viewerType, viewerName, studentId) => {
+  // Validate required parameters
+  if (!viewerType || !studentId) {
+    return { valid: false, error: 'viewerType and studentId are required' };
+  }
+
+  // Validate studentId
+  if (!isValidObjectId(studentId)) {
+    return { valid: false, error: 'Invalid student ID' };
+  }
+
+  // Validate viewerType
+  const validViewerTypes = ['student', 'parent'];
+  const viewerTypeValidation = validateEnum(viewerType, validViewerTypes);
+  if (!viewerTypeValidation.valid) {
+    return { valid: false, error: viewerTypeValidation.error };
+  }
+
+  let filter;
+  if (viewerTypeValidation.value === 'student') {
+    if (!viewerName) {
+      return { valid: false, error: 'viewerName is required for student notifications' };
+    }
+    // Validate viewerName
+    const viewerNameValidation = validateString(viewerName, 1, 100);
+    if (!viewerNameValidation.valid) {
+      return { valid: false, error: `Viewer name: ${viewerNameValidation.error}` };
+    }
+    filter = buildNotificationFilter(viewerTypeValidation.value, viewerNameValidation.value, studentId);
+  } else {
+    filter = buildNotificationFilter(viewerTypeValidation.value, null, studentId);
+  }
+
+  return { valid: true, filter };
+};
+
 stdRouter.get("/", async (req, res) => {
   try {
     const studentName = req.query.name;
@@ -138,63 +267,7 @@ stdRouter.get("/", async (req, res) => {
     }
 
     const subjectFilter = req.query.subject;
-    let grades = await Grade.find({ student: student._id }).sort({ year: -1, term: 1 });
-    if (subjectFilter) {
-      grades = grades.filter(grade => grade.subject === subjectFilter);
-    }
-
-    const termAggregates = {};
-    grades.forEach(grade => {
-      const key = `${grade.year}-${grade.term}`;
-      if (!termAggregates[key]) {
-        termAggregates[key] = { year: grade.year, term: grade.term, total: 0, count: 0 };
-      }
-      termAggregates[key].total += grade.score;
-      termAggregates[key].count += 1;
-    });
-
-    const termAverages = Object.values(termAggregates).map(item => ({
-      year: item.year,
-      term: item.term,
-      average: item.count ? (item.total / item.count).toFixed(2) : '0.00'
-    }));
-
-    let subjectAverage = null;
-    if (subjectFilter) {
-      const totalScore = grades.reduce((sum, g) => sum + g.score, 0);
-      const countScore = grades.length;
-      subjectAverage = countScore ? (totalScore / countScore).toFixed(2) : '0.00';
-    }
-
-    const attendances = await Attendance.find({ student: student._id });
-    let presentCount = 0;
-    let absentCount = 0;
-    const absentDates = [];
-    attendances.forEach(att => {
-      if (att.status === 'present' || att.status === 'late') presentCount++;
-      if (att.status === 'absent') {
-        absentCount++;
-        absentDates.push(att.date);
-      }
-    });
-
-    const data = {
-      username: student.name,
-      birthDate: student.birthDate,
-      gender: student.gender,
-      subjects: student.subject,
-      bio: student.bio,
-      grades: grades,
-      attendances: attendances,
-      studentId: student._id,
-      studentName: student.name,
-      presentCount: presentCount,
-      absentCount: absentCount,
-      absentDates: absentDates,
-      selectedSubject: subjectFilter || "",
-      termAverages: termAverages,
-      subjectAverage: subjectAverage,
-    };
+    const data = await buildStudentResponse(student, subjectFilter);
     res.status(200).json(data);
   } catch (err) {
     console.error('Error fetching student:', err);
@@ -219,63 +292,7 @@ stdRouter.get("/by-id/:id", async (req, res) => {
     }
 
     const subjectFilter = req.query.subject;
-    let grades = await Grade.find({ student: student._id }).sort({ year: -1, term: 1 });
-    if (subjectFilter) {
-      grades = grades.filter(grade => grade.subject === subjectFilter);
-    }
-
-    const termAggregates = {};
-    grades.forEach(grade => {
-      const key = `${grade.year}-${grade.term}`;
-      if (!termAggregates[key]) {
-        termAggregates[key] = { year: grade.year, term: grade.term, total: 0, count: 0 };
-      }
-      termAggregates[key].total += grade.score;
-      termAggregates[key].count += 1;
-    });
-
-    const termAverages = Object.values(termAggregates).map(item => ({
-      year: item.year,
-      term: item.term,
-      average: item.count ? (item.total / item.count).toFixed(2) : '0.00'
-    }));
-
-    let subjectAverage = null;
-    if (subjectFilter) {
-      const totalScore = grades.reduce((sum, g) => sum + g.score, 0);
-      const countScore = grades.length;
-      subjectAverage = countScore ? (totalScore / countScore).toFixed(2) : '0.00';
-    }
-
-    const attendances = await Attendance.find({ student: student._id });
-    let presentCount = 0;
-    let absentCount = 0;
-    const absentDates = [];
-    attendances.forEach(att => {
-      if (att.status === 'present' || att.status === 'late') presentCount++;
-      if (att.status === 'absent') {
-        absentCount++;
-        absentDates.push(att.date);
-      }
-    });
-
-    const data = {
-      username: student.name,
-      birthDate: student.birthDate,
-      gender: student.gender,
-      subjects: student.subject,
-      bio: student.bio,
-      grades: grades,
-      attendances: attendances,
-      studentId: student._id,
-      studentName: student.name,
-      presentCount: presentCount,
-      absentCount: absentCount,
-      absentDates: absentDates,
-      selectedSubject: subjectFilter || "",
-      termAverages: termAverages,
-      subjectAverage: subjectAverage,
-    };
+    const data = await buildStudentResponse(student, subjectFilter);
     res.status(200).json(data);
   } catch (err) {
     console.error('Error fetching student by ID:', err);
@@ -458,13 +475,13 @@ stdRouter.post("/grades", async (req, res) => {
     // Use validated values in query
     const grade = await Grade.findOneAndUpdate(
       { 
-        student: mongoose.Types.ObjectId(studentId), 
+        student: convertToObjectId(studentId), 
         subject: subjectValidation.value, 
         year: yearValidation.value, 
         term: termValidation.value 
       },
       { 
-        student: mongoose.Types.ObjectId(studentId), 
+        student: convertToObjectId(studentId), 
         subject: subjectValidation.value, 
         year: yearValidation.value, 
         term: termValidation.value, 
@@ -538,7 +555,7 @@ stdRouter.post("/attendances", async (req, res) => {
     normalizedDate.setHours(0, 0, 0, 0);
 
     const attendance = await Attendance.findOneAndUpdate(
-      { student: mongoose.Types.ObjectId(studentId), date: normalizedDate },
+      { student: convertToObjectId(studentId), date: normalizedDate },
       { status: statusValidation.value, date: normalizedDate },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
@@ -687,7 +704,7 @@ stdRouter.post("/register-user", async (req, res) => {
       if (studentId && !isValidObjectId(studentId)) {
         return res.status(400).json({ message: 'Invalid student ID format' });
       }
-      validatedStudentId = studentId ? mongoose.Types.ObjectId(studentId) : null;
+      validatedStudentId = studentId ? convertToObjectId(studentId) : null;
     }
 
     // 중복 확인
@@ -723,7 +740,7 @@ stdRouter.get("/:studentId/feedbacks", async (req, res) => {
       return res.status(400).json({ message: 'Invalid student ID' });
     }
 
-    let filter = { studentId: mongoose.Types.ObjectId(studentId) };
+    let filter = { studentId: convertToObjectId(studentId) };
     
     if (viewerType) {
       // Validate viewerType
@@ -740,7 +757,7 @@ stdRouter.get("/:studentId/feedbacks", async (req, res) => {
         }
         
         filter = {
-          studentId: mongoose.Types.ObjectId(studentId),
+          studentId: convertToObjectId(studentId),
           $or: [
             { shareWithTeachers: true },
             { teacherName: viewerNameValidation.value }
@@ -800,7 +817,7 @@ stdRouter.post("/feedbacks", async (req, res) => {
     }
 
     const feedback = new Feedback({
-      studentId: mongoose.Types.ObjectId(studentId),
+      studentId: convertToObjectId(studentId),
       teacherName: teacherNameValidation.value,
       academicPerformance: academicPerformance ? String(academicPerformance).trim() : '',
       attendance: attendance ? String(attendance).trim() : '',
@@ -814,7 +831,7 @@ stdRouter.post("/feedbacks", async (req, res) => {
 
     const notificationMessage = `${student.name} 학생에 대한 새로운 피드백이 등록되었습니다.`;
     await Notification.create({
-      studentId: mongoose.Types.ObjectId(studentId),
+      studentId: convertToObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
       message: notificationMessage,
@@ -822,7 +839,7 @@ stdRouter.post("/feedbacks", async (req, res) => {
       relatedData: { teacherName: teacherNameValidation.value, feedbackId: newFeedback._id }
     });
     await Notification.create({
-      studentId: mongoose.Types.ObjectId(studentId),
+      studentId: convertToObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
       type: 'feedback',
@@ -845,40 +862,13 @@ stdRouter.post("/feedbacks", async (req, res) => {
 stdRouter.get("/notifications", async (req, res) => {
   try {
     const { viewerType, viewerName, studentId } = req.query;
-    
-    // Validate required parameters
-    if (!viewerType || !studentId) {
-      return res.status(400).json({ message: 'viewerType and studentId are required' });
+
+    const validation = validateAndBuildNotificationFilter(viewerType, viewerName, studentId);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.error });
     }
 
-    // Validate studentId
-    if (!isValidObjectId(studentId)) {
-      return res.status(400).json({ message: 'Invalid student ID' });
-    }
-
-    // Validate viewerType
-    const validViewerTypes = ['student', 'parent'];
-    const viewerTypeValidation = validateEnum(viewerType, validViewerTypes);
-    if (!viewerTypeValidation.valid) {
-      return res.status(400).json({ message: viewerTypeValidation.error });
-    }
-
-    let filter;
-    if (viewerTypeValidation.value === 'student') {
-      if (!viewerName) {
-        return res.status(400).json({ message: 'viewerName is required for student notifications' });
-      }
-      // Validate viewerName
-      const viewerNameValidation = validateString(viewerName, 1, 100);
-      if (!viewerNameValidation.valid) {
-        return res.status(400).json({ message: `Viewer name: ${viewerNameValidation.error}` });
-      }
-      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'student', recipientName: viewerNameValidation.value };
-    } else {
-      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'parent' };
-    }
-
-    const notifications = await Notification.find(filter).sort({ createdAt: -1 });
+    const notifications = await Notification.find(validation.filter).sort({ createdAt: -1 });
     res.status(200).json(notifications);
   } catch (err) {
     console.error('Error fetching notifications:', err);
@@ -890,40 +880,13 @@ stdRouter.get("/notifications", async (req, res) => {
 stdRouter.post("/notifications/mark-all-read", async (req, res) => {
   try {
     const { viewerType, viewerName, studentId } = req.query;
-    
-    // Validate required parameters
-    if (!viewerType || !studentId) {
-      return res.status(400).json({ message: 'viewerType and studentId are required' });
+
+    const validation = validateAndBuildNotificationFilter(viewerType, viewerName, studentId);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.error });
     }
 
-    // Validate studentId
-    if (!isValidObjectId(studentId)) {
-      return res.status(400).json({ message: 'Invalid student ID' });
-    }
-
-    // Validate viewerType
-    const validViewerTypes = ['student', 'parent'];
-    const viewerTypeValidation = validateEnum(viewerType, validViewerTypes);
-    if (!viewerTypeValidation.valid) {
-      return res.status(400).json({ message: viewerTypeValidation.error });
-    }
-
-    let filter;
-    if (viewerTypeValidation.value === 'student') {
-      if (!viewerName) {
-        return res.status(400).json({ message: 'viewerName is required for student notifications' });
-      }
-      // Validate viewerName
-      const viewerNameValidation = validateString(viewerName, 1, 100);
-      if (!viewerNameValidation.valid) {
-        return res.status(400).json({ message: `Viewer name: ${viewerNameValidation.error}` });
-      }
-      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'student', recipientName: viewerNameValidation.value };
-    } else {
-      filter = { studentId: mongoose.Types.ObjectId(studentId), recipientType: 'parent' };
-    }
-
-    await Notification.updateMany(filter, { read: true });
+    await Notification.updateMany(validation.filter, { read: true });
     res.status(200).json({ message: 'Notifications marked read' });
   } catch (err) {
     console.error('Error marking notifications read:', err);
