@@ -37,7 +37,7 @@ const validateString = (value, minLength = 1, maxLength = 500) => {
  */
 const validateNumber = (value, min = 0, max = 100) => {
   const num = Number(value);
-  if (isNaN(num)) {
+  if (Number.isNaN(num)) {
     return { valid: false, error: 'Value must be a number' };
   }
   if (num < min || num > max) {
@@ -52,7 +52,7 @@ const validateNumber = (value, min = 0, max = 100) => {
 const validateYear = (value) => {
   const num = Number(value);
   const currentYear = new Date().getFullYear();
-  if (isNaN(num) || num < 1900 || num > currentYear) {
+  if (Number.isNaN(num) || num < 1900 || num > currentYear) {
     return { valid: false, error: 'Year is invalid' };
   }
   return { valid: true, value: num };
@@ -63,7 +63,7 @@ const validateYear = (value) => {
  */
 const validateTerm = (value) => {
   const num = Number(value);
-  if (isNaN(num) || (num !== 1 && num !== 2)) {
+  if (Number.isNaN(num) || (num !== 1 && num !== 2)) {
     return { valid: false, error: 'Term must be 1 or 2' };
   }
   return { valid: true, value: num };
@@ -85,7 +85,7 @@ const validateEnum = (value, allowedValues) => {
  */
 const validateDate = (value) => {
   const date = new Date(value);
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return { valid: false, error: 'Invalid date format' };
   }
   return { valid: true, value: date };
@@ -105,7 +105,7 @@ const validateStudentData = (data) => {
     errors.push('Birth date is required');
   } else {
     const birthDate = new Date(data.birthDate);
-    if (isNaN(birthDate.getTime())) {
+    if (Number.isNaN(birthDate.getTime())) {
       errors.push('Birth date must be a valid date');
     }
   }
@@ -207,8 +207,10 @@ stdRouter.get("/", async (req, res) => {
 stdRouter.get("/by-id/:id", async (req, res) => {
   try {
     const studentId = req.params.id;
-    if (!studentId) {
-      return res.status(400).json({ message: 'Student ID is required' });
+    
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
     }
 
     const student = await Student.findById(studentId);
@@ -348,8 +350,10 @@ stdRouter.put("/:name", async (req, res) => {
   try {
     const { name, birthDate, gender, subject, bio } = req.body;
     
-    if (!name || !name.toString().trim()) {
-      return res.status(400).json({ message: 'Student name is required' });
+    // Validate name
+    const nameValidation = validateString(name, 2, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Name: ${nameValidation.error}` });
     }
     
     // 입력 검증
@@ -362,7 +366,7 @@ stdRouter.put("/:name", async (req, res) => {
     }
     
     const student = await Student.findOneAndUpdate(
-      { name: name.toString().trim() },
+      { name: nameValidation.value },
       { birthDate: new Date(birthDate), gender: gender, subject: Array.isArray(subject) ? subject : [subject], bio: bio.toString().trim() },
       { returnDocument: 'after', runValidators: true }
     );
@@ -386,15 +390,17 @@ stdRouter.delete("/", async (req, res) => {
   try {
     const { name } = req.body;
     
-    if (!name || !name.toString().trim()) {
-      return res.status(400).json({ message: 'Student name is required' });
+    // Validate name
+    const nameValidation = validateString(name, 2, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Name: ${nameValidation.error}` });
     }
     
-    const result = await Student.findOneAndDelete({ name: name.toString().trim() });
+    const result = await Student.findOneAndDelete({ name: nameValidation.value });
     
     if (!result) {
       return res.status(404).json({ 
-        message: `Student "${name.toString().trim()}" not found` 
+        message: `Student "${nameValidation.value}" not found`
       });
     }
     
@@ -563,16 +569,19 @@ stdRouter.get("/subjects", async (req, res) => {
 stdRouter.post("/subjects", async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name || !name.trim()) {
-      return res.status(400).json({ message: 'Subject name is required' });
+    
+    // Validate subject name
+    const nameValidation = validateString(name, 1, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Subject name: ${nameValidation.error}` });
     }
     
-    const existing = await Subject.findOne({ name: name.trim() });
+    const existing = await Subject.findOne({ name: nameValidation.value });
     if (existing) {
       return res.status(400).json({ message: 'Subject already exists' });
     }
     
-    const subject = await Subject.create({ name: name.trim() });
+    const subject = await Subject.create({ name: nameValidation.value });
     res.status(201).json(subject);
   } catch (err) {
     console.error('Error creating subject:', err);
@@ -583,7 +592,14 @@ stdRouter.post("/subjects", async (req, res) => {
 stdRouter.delete("/subjects/:name", async (req, res) => {
   try {
     const { name } = req.params;
-    const subject = await Subject.findOneAndDelete({ name: name.trim() });
+    
+    // Validate subject name
+    const nameValidation = validateString(name, 1, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Subject name: ${nameValidation.error}` });
+    }
+    
+    const subject = await Subject.findOneAndDelete({ name: nameValidation.value });
     if (!subject) {
       return res.status(404).json({ message: 'Subject not found' });
     }
@@ -599,17 +615,32 @@ stdRouter.post("/login", async (req, res) => {
   try {
     const { username, password, userType } = req.body;
 
-    if (!username || !password || !userType) {
-      return res.status(400).json({ message: 'Username, password, and user type are required' });
+    // Validate username
+    const usernameValidation = validateString(username, 1, 100);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ message: `Username: ${usernameValidation.error}` });
     }
 
-    const user = await User.findOne({ username, userType });
+    // Validate password
+    const passwordValidation = validateString(password, 1, 500);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: `Password: ${passwordValidation.error}` });
+    }
+
+    // Validate userType
+    const validUserTypes = ['student', 'teacher', 'parent', 'admin'];
+    const userTypeValidation = validateEnum(userType, validUserTypes);
+    if (!userTypeValidation.valid) {
+      return res.status(400).json({ message: userTypeValidation.error });
+    }
+
+    const user = await User.findOne({ username: usernameValidation.value, userType: userTypeValidation.value });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // 간단한 비밀번호 비교 (실제로는 bcrypt 사용 권장)
-    if (user.password !== password) {
+    if (user.password !== passwordValidation.value) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -631,21 +662,45 @@ stdRouter.post("/register-user", async (req, res) => {
   try {
     const { username, password, userType, studentId } = req.body;
 
-    if (!username || !password || !userType) {
-      return res.status(400).json({ message: 'Username, password, and user type are required' });
+    // Validate username
+    const usernameValidation = validateString(username, 1, 100);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ message: `Username: ${usernameValidation.error}` });
+    }
+
+    // Validate password
+    const passwordValidation = validateString(password, 1, 500);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: `Password: ${passwordValidation.error}` });
+    }
+
+    // Validate userType
+    const validUserTypes = ['student', 'teacher', 'parent', 'admin'];
+    const userTypeValidation = validateEnum(userType, validUserTypes);
+    if (!userTypeValidation.valid) {
+      return res.status(400).json({ message: userTypeValidation.error });
+    }
+
+    // Validate studentId if required
+    let validatedStudentId = null;
+    if (userTypeValidation.value === 'student' || userTypeValidation.value === 'parent') {
+      if (studentId && !isValidObjectId(studentId)) {
+        return res.status(400).json({ message: 'Invalid student ID format' });
+      }
+      validatedStudentId = studentId ? mongoose.Types.ObjectId(studentId) : null;
     }
 
     // 중복 확인
-    const existingUser = await User.findOne({ username });
+    const existingUser = await User.findOne({ username: usernameValidation.value });
     if (existingUser) {
       return res.status(400).json({ message: 'Username already exists' });
     }
 
     const user = new User({
-      username,
-      password, // 실제로는 해시화해야 함
-      userType,
-      studentId: (userType === 'student' || userType === 'parent') ? studentId : null
+      username: usernameValidation.value,
+      password: passwordValidation.value, // 실제로는 해시화해야 함
+      userType: userTypeValidation.value,
+      studentId: validatedStudentId
     });
 
     const newUser = await user.save();

@@ -308,7 +308,7 @@ function App() {
   const validateBirthDate = (birthDate) => {
     if (!birthDate) return 'Birth date is required'
     const date = new Date(birthDate)
-    if (isNaN(date.getTime())) return 'Birth date must be a valid date'
+    if (Number.isNaN(date.getTime())) return 'Birth date must be a valid date'
     return null
   }
 
@@ -363,7 +363,7 @@ function App() {
   const handleGradeScaleChange = (grade, value) => {
     setGradeScale(prev => ({
       ...prev,
-      [grade]: parseInt(value) || 0
+      [grade]: Number.parseInt(value) || 0
     }))
   }
 
@@ -552,7 +552,7 @@ function App() {
     const { name, value } = e.target
     setGradeData(prev => ({
       ...prev,
-      [name]: name === 'year' || name === 'term' || name === 'score' ? parseInt(value) : value
+      [name]: name === 'year' || name === 'term' || name === 'score' ? Number.parseInt(value) : value
     }))
   }
 
@@ -580,7 +580,7 @@ function App() {
         body: JSON.stringify({
           studentId: studentData.studentId,
           subject: gradeData.subject.trim(),
-          score: parseInt(gradeData.score),
+          score: Number.parseInt(gradeData.score),
           year: gradeData.year,
           term: gradeData.term
         })
@@ -694,8 +694,8 @@ function App() {
       setError('Age is required')
       return
     }
-    const ageNum = parseInt(editData.age)
-    if (isNaN(ageNum)) {
+    const ageNum = Number.parseInt(editData.age)
+    if (Number.isNaN(ageNum)) {
       setError('Age must be a number')
       return
     }
@@ -721,7 +721,7 @@ function App() {
         },
         body: JSON.stringify({
           name: editData.name.trim(),
-          age: parseInt(editData.age),
+          age: Number.parseInt(editData.age),
           subject: editData.subject,
           bio: editData.bio.trim()
         })
@@ -965,10 +965,16 @@ function App() {
               ) : allStudents.length > 0 ? (
                 <ul style={{ listStyle: 'none', padding: 0, maxHeight: '300px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
                   {allStudents.map(student => (
-                    <li key={student.name} style={{ padding: '8px', borderBottom: '1px solid #eee', cursor: 'pointer' }} onClick={() => {
+                    <li key={student.name} style={{ padding: '8px', borderBottom: '1px solid #eee', cursor: 'pointer', listStyle: 'none' }} onClick={() => {
                       setStudentName(student.name)
                       fetchStudent(student.name, true)  // ← true로 변경 (모달 자동 표시)
-                    }}>
+                    }} onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setStudentName(student.name)
+                        fetchStudent(student.name, true)
+                      }
+                    }} role="button" tabIndex={0}>
                       <strong>{student.name}</strong> - 과목: {Array.isArray(student.subject) ? student.subject.join(', ') : student.subject}
                     </li>
                   ))}
@@ -984,7 +990,7 @@ function App() {
           {studentData && showStudentModal && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
               <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-                <button onClick={() => setShowStudentModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+                <button onClick={() => setShowStudentModal(false)} aria-label="학생 정보 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
                 <h2>{studentData.username} {user.userType === 'teacher' && <button onClick={openEditModal} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>기본정보 수정</button>}</h2>
                 <p><strong>생년월일:</strong> {new Date(studentData.birthDate).toLocaleDateString('ko-KR')}</p>
                 <p><strong>성별:</strong> {studentData.gender === 'male' ? '남성' : '여성'}</p>
@@ -1051,8 +1057,18 @@ function App() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
                         <thead>
                           <tr style={{ backgroundColor: '#f5f5f5' }}>
-                            <th onClick={() => handleSort('term')} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }}>학기 {sortColumn === 'term' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
-                            <th onClick={() => handleSort('subject')} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }}>과목 {sortColumn === 'subject' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
+                            <th onClick={() => handleSort('term')} onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                handleSort('term')
+                              }
+                            }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>학기 {sortColumn === 'term' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
+                            <th onClick={() => handleSort('subject')} onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                handleSort('subject')
+                              }
+                            }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>과목 {sortColumn === 'subject' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
                             <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>성적</th>
                             <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>등급</th>
                             <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>순위</th>
@@ -1146,7 +1162,7 @@ function App() {
       {showGradeModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '500px', width: '90%', position: 'relative' }}>
-            <button onClick={() => setShowGradeModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <button onClick={() => setShowGradeModal(false)} aria-label="성적 입력 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             <h3>Add Grade</h3>
             <form onSubmit={handleAddGrade} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
@@ -1224,7 +1240,7 @@ function App() {
       {showGradeScaleModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '400px', width: '90%', position: 'relative' }}>
-            <button onClick={() => setShowGradeScaleModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <button onClick={() => setShowGradeScaleModal(false)} aria-label="등급 기준 변경 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             <h3>등급 기준 변경</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {Object.entries(gradeScale).sort((a,b) => b[1] - a[1]).map(([grade, score]) => (
@@ -1263,7 +1279,7 @@ function App() {
       {showAttendanceModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '400px', width: '90%', position: 'relative' }}>
-            <button onClick={() => setShowAttendanceModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <button onClick={() => setShowAttendanceModal(false)} aria-label="출석 입력 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             <h3>출석 입력</h3>
             <form onSubmit={handleAddAttendance} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
@@ -1312,8 +1328,7 @@ function App() {
       {showEditModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '500px', width: '90%', position: 'relative' }}>
-            <button onClick={() => setShowEditModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
-            <h3>기본정보 수정</h3>
+            <button onClick={() => setShowEditModal(false)} aria-label="기본정보 수정 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             <form onSubmit={handleUpdateStudent} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 이름</label>
@@ -1401,8 +1416,7 @@ function App() {
       {showFeedbackModal && studentData && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-            <button onClick={() => setShowFeedbackModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
-            <h3>교사 피드백 작성</h3>
+            <button onClick={() => setShowFeedbackModal(false)} aria-label="피드백 작성 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             <p style={{ color: '#666', marginBottom: '15px' }}>학생: <strong>{studentData.username}</strong></p>
             <form onSubmit={handleAddFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <div>
@@ -1497,8 +1511,7 @@ function App() {
       {showNotificationsModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-            <button onClick={() => setShowNotificationsModal(false)} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
-            <h3>알림</h3>
+            <button onClick={() => setShowNotificationsModal(false)} aria-label="알림 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
             {notificationsLoading ? (
               <p>알림을 불러오는 중입니다...</p>
             ) : notificationsError ? (
