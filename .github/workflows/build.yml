@@ -7,13 +7,35 @@ on:
     types: [opened, synchronize, reopened]
 jobs:
   sonarqube:
-    name: SonarQube
+    name: SonarCloud
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root dependencies
+        run: npm install
+      - name: Install frontend dependencies
+        run: npm install --prefix client
+      - name: Install backend dependencies
+        run: npm install --prefix server
+      - name: Run backend coverage tests
+        run: npm run coverage:backend
+      - name: Run frontend coverage tests
+        run: npm run coverage:frontend
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@v1
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=client,server
+            -Dsonar.tests=client,server
+            -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,server/coverage/lcov.info
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

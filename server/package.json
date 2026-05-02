@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "test": "jest --coverage --watchAll=false"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +20,7 @@
     "mongoose": "^9.3.3"
   },
   "devDependencies": {
+    "jest": "^30.3.0",
     "nodemon": "^3.1.14"
   }
 }
