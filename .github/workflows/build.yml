@@ -33,7 +33,7 @@ jobs:
       - name: Run frontend coverage tests
         run: npm run coverage:frontend
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v1
+        uses: sonarsource/sonarcloud-github-action@v2
         with:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
