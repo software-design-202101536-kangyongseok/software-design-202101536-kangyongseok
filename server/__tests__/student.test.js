@@ -43,4 +43,3 @@ describe('Student Model', () => {
     expect(err).toBeInstanceOf(mongoose.Error.ValidationError);
   });
 });
-<parameter name="filePath">c:\Users\82105\SWD\SWD_Project\server\__tests__\student.test.js </parameter>

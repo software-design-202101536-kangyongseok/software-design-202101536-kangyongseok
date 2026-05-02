@@ -5,6 +5,12 @@ export default {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   transform: {
-    '^.+\\.js$': 'babel-jest',
+    '^.+\\.[tj]sx?$': 'babel-jest',
+  },
+  extensionsToTreatAsEsm: ['.jsx'],
+  globals: {
+    'babel-jest': {
+      useESM: true,
+    },
   },
 };
