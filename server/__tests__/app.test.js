@@ -24,5 +24,5 @@ describe('API Tests', () => {
     expect(response.status).toBe(200);
     // Add more assertions based on your routes
   });
-});</content>
-<parameter name="filePath">c:\Users\82105\SWD\SWD_Project\server\__tests__\app.test.js
+});
+<parameter name="filePath">c:\Users\82105\SWD\SWD_Project\server\__tests__\app.test.js </parameter>
