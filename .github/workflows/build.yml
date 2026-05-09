@@ -47,8 +47,8 @@ jobs:
           args: >
             -Dsonar.sources=client/src,server
             -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,server/coverage/lcov.info
-            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**
-            -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/lcov-report/**,**/dist/**,**/build/**,**.html,**.css
+            -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/lcov-report/**,**/dist/**,**/build/**
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
