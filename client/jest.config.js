@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
   transform: {
@@ -8,7 +8,6 @@ export default {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|svg)$': '<rootDir>/__mocks__/fileMock.js'
   },
-  extensionsToTreatAsEsm: ['.jsx'],
   collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.{js,jsx}',
@@ -42,10 +41,5 @@ export default {
     '/coverage/',
     '/dist/',
     '/build/'
-  ],
-  globals: {
-    'babel-jest': {
-      useESM: true,
-    },
-  },
+  ]
 };

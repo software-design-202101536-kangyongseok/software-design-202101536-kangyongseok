@@ -41,6 +41,10 @@ jobs:
             -Dsonar.exclusions=**/node_modules/**,**/__tests__/**
             -Dsonar.test.exclusions=
             -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,server/coverage/lcov.info
+            -Dsonar.coverage.exclusions=**/node_modules/**,**/__tests__/**,**/tests/**,**/dist/**,**/build/**
+            -Dsonar.cpd.exclusions=**/node_modules/**,**/__tests__/**,**/tests/**
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.coverage.jacoco.xmlReportPaths=
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
