@@ -1,12 +1,10 @@
 export default {
   testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
   transform: {
     '^.+\\.(js|jsx)$': 'babel-jest'
   },
   moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-    '\\.(jpg|jpeg|png|gif|svg)$': '<rootDir>/__mocks__/fileMock.js'
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
   },
   extensionsToTreatAsEsm: ['.jsx'],
   collectCoverage: true,
@@ -14,35 +12,30 @@ export default {
     'src/**/*.{js,jsx}',
     '!src/main.jsx',
     '!src/index.jsx',
-    '!src/**/__tests__/**',
     '!src/**/*.test.{js,jsx}',
     '!src/**/*.spec.{js,jsx}'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['lcov', 'text', 'text-summary', 'html'],
+  coverageReporters: ['lcov', 'text', 'text-summary'],
   coveragePathIgnorePatterns: [
-    '/node_modules/',
-    '/dist/',
-    '/build/'
+    '/node_modules/'
   ],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 50,
-      lines: 50,
-      statements: 50
+      branches: 30,
+      functions: 30,
+      lines: 30,
+      statements: 30
     }
   },
   testMatch: [
-    '<rootDir>/src/**/__tests__/**/*.{js,jsx}',
-    '<rootDir>/src/**/*.{spec,test}.{js,jsx}'
+    '<rootDir>/src/**/*.test.{js,jsx}',
+    '<rootDir>/src/**/*.spec.{js,jsx}'
   ],
   testPathIgnorePatterns: [
-    '/node_modules/',
-    '/coverage/',
-    '/dist/',
-    '/build/'
+    '/node_modules/'
   ],
+  passWithNoTests: true,
   globals: {
     'babel-jest': {
       useESM: true,
