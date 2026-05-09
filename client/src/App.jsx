@@ -821,7 +821,7 @@ function App() {
     return <Login onLogin={handleLogin} />
   }
 
-  return (
+  const renderMainApp = () => (
     <div className="App" style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ textAlign: 'center', color: '#333' }}>Student Management System</h1>
@@ -925,240 +925,8 @@ function App() {
           </button>
         )}
       </nav>
-      {activeTab === 'search' && (
-        <section>
-          {user.userType === 'teacher' && (
-            <div style={{ marginBottom: '15px' }}>
-              <input
-                type="text"
-                placeholder="학생 이름을 입력하세요"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-                style={{ marginRight: '5px', padding: '8px' }}
-              />
-              <input
-                type="text"
-                placeholder="과목으로 필터링 (선택사항)"
-                value={subjectFilter}
-                onChange={(e) => setSubjectFilter(e.target.value)}
-                style={{ marginRight: '5px', padding: '8px' }}
-              />
-              <button onClick={() => { fetchStudent(); setShowStudentModal(true); }} disabled={loading} style={{ padding: '8px 16px' }}>
-                {loading ? '검색 중...' : '검색'}
-              </button>
-            </div>
-          )}
-          {/* studentData 여부와 관계없이 항상 표시 */}
-          {user.userType === 'teacher' && !showStudentModal && (
-            <div style={{ marginBottom: '20px' }}>
-              <h3>전체 학생 목록</h3>
-              <button onClick={fetchAllStudents} disabled={allStudentsLoading} style={{ marginBottom: '10px', padding: '5px 10px', backgroundColor: allStudentsLoading ? '#ccc' : '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: allStudentsLoading ? 'not-allowed' : 'pointer' }}>
-                {allStudentsLoading ? '로딩중...' : '새로고침'}
-              </button>
-              {allStudentsError && (
-                <p style={{ color: 'red', marginBottom: '10px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>
-                  오류: {allStudentsError}
-                </p>
-              )}
-              {allStudentsLoading ? (
-                <p>학생 데이터 로딩 중...</p>
-              ) : allStudents.length > 0 ? (
-                <ul style={{ listStyle: 'none', padding: 0, maxHeight: '300px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
-                  {allStudents.map(student => (
-                    <li key={student.name} style={{ padding: '8px', borderBottom: '1px solid #eee', cursor: 'pointer', listStyle: 'none' }} onClick={() => {
-                      setStudentName(student.name)
-                      fetchStudent(student.name, true)  // ← true로 변경 (모달 자동 표시)
-                    }} onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setStudentName(student.name)
-                        fetchStudent(student.name, true)
-                      }
-                    }} role="button" tabIndex={0}>
-                      <strong>{student.name}</strong> - 과목: {Array.isArray(student.subject) ? student.subject.join(', ') : student.subject}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>등록된 학생이 없습니다.</p>
-              )}
-            </div>
-          )}
-
-          
-          {error && <p style={{ color: 'red', margin: '10px 0' }}>{error}</p>}
-          {studentData && showStudentModal && (
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-              <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-                <button onClick={() => setShowStudentModal(false)} aria-label="학생 정보 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
-                <h2>{studentData.username} {user.userType === 'teacher' && <button onClick={openEditModal} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>기본정보 수정</button>}</h2>
-                <p><strong>생년월일:</strong> {new Date(studentData.birthDate).toLocaleDateString('ko-KR')}</p>
-                <p><strong>성별:</strong> {studentData.gender === 'male' ? '남성' : '여성'}</p>
-                <p><strong>과목:</strong> {studentData.subjects.join(', ')}</p>
-                <p><strong>자기소개:</strong> {studentData.bio}</p>
-                
-                <h3>출석 {user.userType === 'teacher' && <button onClick={() => setShowAttendanceModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>출석 입력</button>}</h3>
-                <p>Present: {studentData.presentCount}, Absent: {studentData.absentCount}, Attendance Rate: {studentData.presentCount + studentData.absentCount > 0 ? ((studentData.presentCount / (studentData.presentCount + studentData.absentCount)) * 100).toFixed(1) : 0}%</p>
-                {studentData.absentDates.length > 0 && (
-                  <div>
-                    <p><strong>Absent Dates:</strong></p>
-                    <ul>
-                      {studentData.absentDates.map((date, index) => (
-                        <li key={index}>{new Date(date).toLocaleDateString()}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <h3>성적 {user.userType === 'teacher' && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
-                <div style={{ marginBottom: '10px' }}>
-                  <strong>등급 기준:</strong>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '5px', backgroundColor: '#f9f9f9' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#e0e0e0' }}>
-                        <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>등급</th>
-                        <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>최소 점수</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(gradeScale).sort((a,b) => b[1] - a[1]).map(([grade, score]) => (
-                        <tr key={grade}>
-                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>{grade}</td>
-                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{score}점 이상</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {studentData.grades.length > 0 ? (
-                  (() => {
-                    const sortedGrades = [...studentData.grades].sort((a, b) => {
-                      let aVal, bVal;
-                      if (sortColumn === 'term') {
-                        aVal = a.year * 10 + a.term;
-                        bVal = b.year * 10 + b.term;
-                      } else if (sortColumn === 'subject') {
-                        aVal = a.subject;
-                        bVal = b.subject;
-                      } else if (sortColumn === 'score') {
-                        aVal = a.score;
-                        bVal = b.score;
-                      } else if (sortColumn === 'grade') {
-                        aVal = getGrade(a.score);
-                        bVal = getGrade(b.score);
-                      }
-                      if (sortDirection === 'asc') {
-                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                      } else {
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                      }
-                    });
-                    return (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: '#f5f5f5' }}>
-                            <th onClick={() => handleSort('term')} onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                handleSort('term')
-                              }
-                            }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>학기 {sortColumn === 'term' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
-                            <th onClick={() => handleSort('subject')} onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                handleSort('subject')
-                              }
-                            }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>과목 {sortColumn === 'subject' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
-                            <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>성적</th>
-                            <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>등급</th>
-                            <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>순위</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedGrades.map((grade, index) => (
-                            <tr key={index}>
-                              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.year} Term {grade.term}</td>
-                              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.subject}</td>
-                              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.score}</td>
-                              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getGrade(grade.score)}</td>
-                              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getRank(grade.subject, grade.score)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    );
-                  })()
-                ) : (
-                  <p>No grades available</p>
-                )}
-                
-                <h3>Term Averages</h3>
-                {studentData.termAverages.length > 0 ? (
-                  <ul>
-                    {studentData.termAverages.map((avg, index) => (
-                      <li key={index}>{avg.year} Term {avg.term}: {avg.average}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No term averages available</p>
-                )}
-                
-                {studentData.subjectAverage && (
-                  <p><strong>Subject Average:</strong> {studentData.subjectAverage}</p>
-                )}
-                <h3>교사 피드백 {user.userType === 'teacher' && studentData &&<button onClick={() => setShowFeedbackModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#673AB7', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>피드백 작성</button>}</h3>
-                  {studentFeedbacks.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      {studentFeedbacks.map((feedback, index) => (
-                        <div key={feedback._id || index} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '15px', backgroundColor: '#f9f9f9' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '2px solid #e0e0e0', paddingBottom: '8px' }}>
-                            <strong style={{ color: '#673AB7' }}>작성자: {feedback.teacherName}</strong>
-                            <span style={{ color: '#666', fontSize: '14px' }}>{new Date(feedback.createdAt).toLocaleDateString('ko-KR')}</span>
-                          </div>
-                          <div style={{ marginBottom: '10px', fontSize: '14px', color: '#555' }}>
-                            <strong>공유 여부:</strong> {feedback.shareWithTeachers ? '다른 교사와 공유됨' : '다른 교사와 공유되지 않음'}
-                          </div>
-                          {feedback.academicPerformance && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <strong style={{ color: '#2196F3' }}>📚 성적:</strong>
-                              <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.academicPerformance}</p>
-                            </div>
-                          )}
-                          {feedback.attendance && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <strong style={{ color: '#4CAF50' }}>📅 출결:</strong>
-                              <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.attendance}</p>
-                            </div>
-                          )}
-                          {feedback.behavior && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <strong style={{ color: '#FF9800' }}>👥 행동:</strong>
-                              <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.behavior}</p>
-                            </div>
-                          )}
-                          {feedback.attitude && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <strong style={{ color: '#9C27B0' }}>💪 태도:</strong>
-                              <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.attitude}</p>
-                            </div>
-                          )}
-                          {feedback.additionalComments && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <strong style={{ color: '#607D8B' }}>💬 추가 의견:</strong>
-                              <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.additionalComments}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p>등록된 피드백이 없습니다.</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
+            {activeTab === 'search' && renderSearchSection()}
+      
       {showGradeModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '500px', width: '90%', position: 'relative' }}>
@@ -1727,6 +1495,238 @@ function App() {
       )}
     </div>
   )
+
+  const renderSearchSection = () => (
+    <section>
+      {user.userType === 'teacher' && (
+        <div style={{ marginBottom: '15px' }}>
+          <input
+            type="text"
+            placeholder="학생 이름을 입력하세요"
+            value={studentName}
+            onChange={(e) => setStudentName(e.target.value)}
+            style={{ marginRight: '5px', padding: '8px' }}
+          />
+          <input
+            type="text"
+            placeholder="과목으로 필터링 (선택사항)"
+            value={subjectFilter}
+            onChange={(e) => setSubjectFilter(e.target.value)}
+            style={{ marginRight: '5px', padding: '8px' }}
+          />
+          <button onClick={() => { fetchStudent(); setShowStudentModal(true); }} disabled={loading} style={{ padding: '8px 16px' }}>
+            {loading ? '검색 중...' : '검색'}
+          </button>
+        </div>
+      )}
+      {/* studentData 여부와 관계없이 항상 표시 */}
+      {user.userType === 'teacher' && !showStudentModal && (
+        <div style={{ marginBottom: '20px' }}>
+          <h3>전체 학생 목록</h3>
+          <button onClick={fetchAllStudents} disabled={allStudentsLoading} style={{ marginBottom: '10px', padding: '5px 10px', backgroundColor: allStudentsLoading ? '#ccc' : '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: allStudentsLoading ? 'not-allowed' : 'pointer' }}>
+            {allStudentsLoading ? '로딩중...' : '새로고침'}
+          </button>
+          {allStudentsError && (
+            <p style={{ color: 'red', marginBottom: '10px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>
+              오류: {allStudentsError}
+            </p>
+          )}
+          {allStudentsLoading ? (
+            <p>학생 데이터 로딩 중...</p>
+          ) : allStudents.length > 0 ? (
+            <ul style={{ listStyle: 'none', padding: 0, maxHeight: '300px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+              {allStudents.map(student => (
+                <li key={student.name} style={{ padding: '8px', borderBottom: '1px solid #eee', cursor: 'pointer', listStyle: 'none' }} onClick={() => {
+                  setStudentName(student.name)
+                  fetchStudent(student.name, true)
+                }} onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setStudentName(student.name)
+                    fetchStudent(student.name, true)
+                  }
+                }} role="button" tabIndex={0}>
+                  <strong>{student.name}</strong> - 과목: {Array.isArray(student.subject) ? student.subject.join(', ') : student.subject}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>등록된 학생이 없습니다.</p>
+          )}
+        </div>
+      )}
+
+      {error && <p style={{ color: 'red', margin: '10px 0' }}>{error}</p>}
+      {studentData && showStudentModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setShowStudentModal(false)} aria-label="학생 정보 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <h2>{studentData.username} {user.userType === 'teacher' && <button onClick={openEditModal} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>기본정보 수정</button>}</h2>
+            <p><strong>생년월일:</strong> {new Date(studentData.birthDate).toLocaleDateString('ko-KR')}</p>
+            <p><strong>성별:</strong> {studentData.gender === 'male' ? '남성' : '여성'}</p>
+            <p><strong>과목:</strong> {studentData.subjects.join(', ')}</p>
+            <p><strong>자기소개:</strong> {studentData.bio}</p>
+            <h3>출석 {user.userType === 'teacher' && <button onClick={() => setShowAttendanceModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>출석 입력</button>}</h3>
+            <p>Present: {studentData.presentCount}, Absent: {studentData.absentCount}, Attendance Rate: {studentData.presentCount + studentData.absentCount > 0 ? ((studentData.presentCount / (studentData.presentCount + studentData.absentCount)) * 100).toFixed(1) : 0}%</p>
+            {studentData.absentDates.length > 0 && (
+              <div>
+                <p><strong>Absent Dates:</strong></p>
+                <ul>
+                  {studentData.absentDates.map((date, index) => (
+                    <li key={index}>{new Date(date).toLocaleDateString()}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <h3>성적 {user.userType === 'teacher' && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
+            <div style={{ marginBottom: '10px' }}>
+              <strong>등급 기준:</strong>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '5px', backgroundColor: '#f9f9f9' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#e0e0e0' }}>
+                    <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>등급</th>
+                    <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>최소 점수</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(gradeScale).sort((a,b) => b[1] - a[1]).map(([grade, score]) => (
+                    <tr key={grade}>
+                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>{grade}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{score}점 이상</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {studentData.grades.length > 0 ? (
+              (() => {
+                const sortedGrades = [...studentData.grades].sort((a, b) => {
+                  let aVal, bVal;
+                  if (sortColumn === 'term') {
+                    aVal = a.year * 10 + a.term;
+                    bVal = b.year * 10 + b.term;
+                  } else if (sortColumn === 'subject') {
+                    aVal = a.subject;
+                    bVal = b.subject;
+                  } else if (sortColumn === 'score') {
+                    aVal = a.score;
+                    bVal = b.score;
+                  } else if (sortColumn === 'grade') {
+                    aVal = getGrade(a.score);
+                    bVal = getGrade(b.score);
+                  }
+                  if (sortDirection === 'asc') {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                  } else {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                  }
+                });
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                        <th onClick={() => handleSort('term')} onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleSort('term')
+                          }
+                        }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>학기 {sortColumn === 'term' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
+                        <th onClick={() => handleSort('subject')} onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleSort('subject')
+                          }
+                        }} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', cursor: 'pointer' }} role="button" tabIndex={0}>과목 {sortColumn === 'subject' ? (sortDirection === 'asc' ? '🔼' : '🔽') : '↕️'}</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>성적</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>등급</th>
+                        <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>순위</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedGrades.map((grade, index) => (
+                        <tr key={index}>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.year} Term {grade.term}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.subject}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{grade.score}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getGrade(grade.score)}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getRank(grade.subject, grade.score)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()
+            ) : (
+              <p>No grades available</p>
+            )}
+            <h3>Term Averages</h3>
+            {studentData.termAverages.length > 0 ? (
+              <ul>
+                {studentData.termAverages.map((avg, index) => (
+                  <li key={index}>{avg.year} Term {avg.term}: {avg.average}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No term averages available</p>
+            )}
+            {studentData.subjectAverage && (
+              <p><strong>Subject Average:</strong> {studentData.subjectAverage}</p>
+            )}
+            <h3>교사 피드백 {user.userType === 'teacher' && studentData &&<button onClick={() => setShowFeedbackModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#673AB7', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>피드백 작성</button>}</h3>
+            {studentFeedbacks.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {studentFeedbacks.map((feedback, index) => (
+                  <div key={feedback._id || index} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '15px', backgroundColor: '#f9f9f9' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '2px solid #e0e0e0', paddingBottom: '8px' }}>
+                      <strong style={{ color: '#673AB7' }}>작성자: {feedback.teacherName}</strong>
+                      <span style={{ color: '#666', fontSize: '14px' }}>{new Date(feedback.createdAt).toLocaleDateString('ko-KR')}</span>
+                    </div>
+                    <div style={{ marginBottom: '10px', fontSize: '14px', color: '#555' }}>
+                      <strong>공유 여부:</strong> {feedback.shareWithTeachers ? '다른 교사와 공유됨' : '다른 교사와 공유되지 않음'}
+                    </div>
+                    {feedback.academicPerformance && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong style={{ color: '#2196F3' }}>📚 성적:</strong>
+                        <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.academicPerformance}</p>
+                      </div>
+                    )}
+                    {feedback.attendance && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong style={{ color: '#4CAF50' }}>📅 출결:</strong>
+                        <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.attendance}</p>
+                      </div>
+                    )}
+                    {feedback.behavior && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong style={{ color: '#FF9800' }}>👥 행동:</strong>
+                        <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.behavior}</p>
+                      </div>
+                    )}
+                    {feedback.attitude && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong style={{ color: '#9C27B0' }}>💪 태도:</strong>
+                        <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.attitude}</p>
+                      </div>
+                    )}
+                    {feedback.additionalComments && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong style={{ color: '#607D8B' }}>💬 추가 의견:</strong>
+                        <p style={{ margin: '5px 0 0 20px', whiteSpace: 'pre-wrap' }}>{feedback.additionalComments}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>등록된 피드백이 없습니다.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+
+  return renderMainApp()
 }
 
 export default App
