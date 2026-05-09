@@ -10,7 +10,7 @@ module.exports = {
     '!app.js'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['lcov', 'text', 'text-summary'],
+  coverageReporters: ['lcov', 'text'],
   coverageThreshold: {
     global: {
       branches: 30,

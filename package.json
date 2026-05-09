@@ -6,8 +6,8 @@
   "scripts": {
     "test:frontend": "npm --prefix client test",
     "test:backend": "npm --prefix server test",
-    "coverage:frontend": "npm --prefix client test -- --coverageDirectory=coverage",
-    "coverage:backend": "npm --prefix server test -- --coverageDirectory=coverage",
+    "coverage:frontend": "npm --prefix client test -- --coverageDirectory=coverage && (rm -rf client/coverage/lcov-report || true)",
+    "coverage:backend": "npm --prefix server test -- --coverageDirectory=coverage && (rm -rf server/coverage/lcov-report || true)",
     "test:all": "npm run test:backend && npm run test:frontend",
     "coverage:all": "npm run coverage:backend && npm run coverage:frontend"
   }

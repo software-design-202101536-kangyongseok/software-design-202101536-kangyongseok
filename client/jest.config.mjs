@@ -16,7 +16,7 @@ export default {
     '!src/**/*.spec.{js,jsx}'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['lcov', 'text', 'text-summary'],
+  coverageReporters: ['lcov', 'text'],
   coveragePathIgnorePatterns: [
     '/node_modules/'
   ],

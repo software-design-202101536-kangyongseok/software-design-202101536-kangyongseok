@@ -41,14 +41,19 @@ jobs:
           echo "Frontend coverage:"
           ls -la client/coverage/ 2>/dev/null || echo "No frontend coverage"
         continue-on-error: true
+      - name: Remove lcov-report HTML directories
+        run: |
+          find . -type d -name "lcov-report" -exec rm -rf {} + 2>/dev/null || true
+          echo "All lcov-report directories removed"
+        continue-on-error: true
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2
         with:
           args: >
             -Dsonar.sources=client/src,server
             -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,server/coverage/lcov.info
-            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/lcov-report/**,**/dist/**,**/build/**,**.html,**.css
-            -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/lcov-report/**,**/dist/**,**/build/**
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**,**/*.html,**/*.css
+            -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

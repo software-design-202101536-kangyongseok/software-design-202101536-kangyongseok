@@ -1,0 +1,17 @@
+# Ignore coverage reports
+coverage/
+**/coverage/
+lcov-report/
+**/lcov-report/
+
+# Ignore generated files
+dist/
+build/
+node_modules/
+
+# Ignore test files  
+**/*.test.js
+**/*.test.jsx
+**/*.spec.js
+**/*.spec.jsx
+**/__tests__/
