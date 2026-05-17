@@ -8,6 +8,7 @@ const Subject = require("../models/subject");
 const User = require("../models/user");
 const Feedback = require("../models/feedback");
 const Notification = require("../models/notification");
+const Counseling = require("../models/counseling");
 
 // ==================== Input Validation Utilities ====================
 /**
@@ -569,6 +570,196 @@ stdRouter.post("/attendances", async (req, res) => {
     res.status(400).json({ 
       message: err.message || 'Failed to update attendance' 
     });
+  }
+});
+
+// Counseling / 상담 관리
+stdRouter.post("/:studentId/counselings", async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { teacherName, date, time, studentNote } = req.body;
+
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
+    }
+
+    const teacherNameValidation = validateString(teacherName || '', 2, 100);
+    if (!teacherNameValidation.valid) {
+      return res.status(400).json({ message: `Teacher name: ${teacherNameValidation.error}` });
+    }
+
+    const dateValidation = validateDate(date);
+    if (!dateValidation.valid) {
+      return res.status(400).json({ message: dateValidation.error });
+    }
+
+    const timeValidation = validateString(time || '', 1, 10);
+    if (!timeValidation.valid) {
+      return res.status(400).json({ message: `Time: ${timeValidation.error}` });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const dateTime = new Date(`${dateValidation.value.toISOString().split('T')[0]}T${timeValidation.value}:00`);
+    if (Number.isNaN(dateTime.getTime())) {
+      return res.status(400).json({ message: 'Invalid date/time combination' });
+    }
+
+    const counseling = await Counseling.create({
+      studentId: convertToObjectId(studentId),
+      studentName: student.name,
+      teacherName: teacherNameValidation.value,
+      dateTime,
+      studentNote: studentNote ? String(studentNote).trim() : '',
+      status: 'pending'
+    });
+
+    const notificationMessage = `${student.name} 학생이 ${dateValidation.value.toLocaleDateString('ko-KR')} ${timeValidation.value} 상담을 신청했습니다.`;
+    await Notification.create({
+      studentId: convertToObjectId(studentId),
+      recipientType: 'student',
+      recipientName: student.name,
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+    await Notification.create({
+      studentId: convertToObjectId(studentId),
+      recipientType: 'parent',
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+
+    res.status(201).json({ message: 'Counseling request created', counseling });
+  } catch (err) {
+    console.error('Error creating counseling request:', err);
+    res.status(400).json({ message: err.message || 'Failed to create counseling request' });
+  }
+});
+
+stdRouter.get("/:studentId/counselings", async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
+    }
+
+    const counselings = await Counseling.find({ studentId: convertToObjectId(studentId) }).sort({ dateTime: 1 });
+    res.status(200).json(counselings);
+  } catch (err) {
+    console.error('Error fetching counselings:', err);
+    res.status(500).json({ message: err.message || 'Failed to fetch counseling requests' });
+  }
+});
+
+stdRouter.get("/teacher/counselings", async (req, res) => {
+  try {
+    const counselings = await Counseling.find({}).sort({ dateTime: 1 });
+    res.status(200).json(counselings);
+  } catch (err) {
+    console.error('Error fetching teacher counselings:', err);
+    res.status(500).json({ message: err.message || 'Failed to fetch counseling requests' });
+  }
+});
+
+stdRouter.put("/counselings/:counselingId/status", async (req, res) => {
+  try {
+    const { counselingId } = req.params;
+    const { status, rejectionReason } = req.body;
+
+    if (!counselingId || !isValidObjectId(counselingId)) {
+      return res.status(400).json({ message: 'Valid counseling ID is required' });
+    }
+
+    const statusValidation = validateEnum(status, ['accepted', 'rejected']);
+    if (!statusValidation.valid) {
+      return res.status(400).json({ message: statusValidation.error });
+    }
+
+    const counseling = await Counseling.findById(counselingId);
+    if (!counseling) {
+      return res.status(404).json({ message: 'Counseling request not found' });
+    }
+
+    counseling.status = statusValidation.value;
+    counseling.rejectionReason = statusValidation.value === 'rejected' ? (rejectionReason ? rejectionReason.toString().trim() : '') : '';
+    await counseling.save();
+
+    const notificationMessage = statusValidation.value === 'accepted'
+      ? `${counseling.studentName} 학생의 상담이 ${new Date(counseling.dateTime).toLocaleDateString('ko-KR')} ${new Date(counseling.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}에 확정되었습니다.`
+      : `${counseling.studentName} 학생의 상담 신청이 반려되었습니다. 사유: ${counseling.rejectionReason}`;
+
+    await Notification.create({
+      studentId: counseling.studentId,
+      recipientType: 'student',
+      recipientName: counseling.studentName,
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+    await Notification.create({
+      studentId: counseling.studentId,
+      recipientType: 'parent',
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+
+    res.status(200).json({ message: 'Counseling status updated', counseling });
+  } catch (err) {
+    console.error('Error updating counseling status:', err);
+    res.status(400).json({ message: err.message || 'Failed to update counseling status' });
+  }
+});
+
+stdRouter.put("/counselings/:counselingId/notes", async (req, res) => {
+  try {
+    const { counselingId } = req.params;
+    const { teacherNotes } = req.body;
+
+    if (!counselingId || !isValidObjectId(counselingId)) {
+      return res.status(400).json({ message: 'Valid counseling ID is required' });
+    }
+
+    const notesValidation = validateString(teacherNotes || '', 0, 2000);
+    if (!notesValidation.valid) {
+      return res.status(400).json({ message: `Teacher notes: ${notesValidation.error}` });
+    }
+
+    const counseling = await Counseling.findById(counselingId);
+    if (!counseling) {
+      return res.status(404).json({ message: 'Counseling request not found' });
+    }
+
+    counseling.teacherNotes = notesValidation.value;
+    await counseling.save();
+
+    const notificationMessage = `${counseling.studentName} 학생의 상담 내용이 교사에 의해 업데이트되었습니다.`;
+    await Notification.create({
+      studentId: counseling.studentId,
+      recipientType: 'student',
+      recipientName: counseling.studentName,
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+    await Notification.create({
+      studentId: counseling.studentId,
+      recipientType: 'parent',
+      message: notificationMessage,
+      type: 'counseling',
+      relatedData: { counselingId: counseling._id }
+    });
+
+    res.status(200).json({ message: 'Counseling notes updated', counseling });
+  } catch (err) {
+    console.error('Error updating counseling notes:', err);
+    res.status(400).json({ message: err.message || 'Failed to update counseling notes' });
   }
 });
 

@@ -97,7 +97,16 @@ function App() {
   const [showNotificationsModal, setShowNotificationsModal] = useState(false)
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
-
+  const [counselingRequests, setCounselingRequests] = useState([])
+  const [selectedCounseling, setSelectedCounseling] = useState(null)
+  const [showCounselingModal, setShowCounselingModal] = useState(false)
+  const [counselingForm, setCounselingForm] = useState({ date: new Date().toISOString().split('T')[0], time: '15:00', note: '' })
+  const [counselingError, setCounselingError] = useState('')
+  const [counselingSuccess, setCounselingSuccess] = useState('')
+  const [counselingLoading, setCounselingLoading] = useState(false)
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(new Date().toISOString().split('T')[0])
 
 
   // 피드백 불러오기
@@ -187,6 +196,198 @@ function App() {
     if (notificationsData.some(notification => !notification.read)) {
       await markNotificationsRead()
     }
+  }
+
+  const getMonthDays = (year, month) => {
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const days = []
+    for (let day = 1; day <= lastDay.getDate(); day += 1) {
+      days.push(new Date(year, month, day))
+    }
+    return days
+  }
+
+  const formatDateKey = (date) => {
+    const d = new Date(date)
+    return d.toISOString().split('T')[0]
+  }
+
+  const fetchCounselings = async () => {
+    if (!user) return
+    try {
+      let response
+      if (user.userType === 'teacher') {
+        response = await fetch(`${API_URL}/students/teacher/counselings`)
+      } else {
+        const studentId = user.studentId || studentData?.studentId
+        if (!studentId) return
+        response = await fetch(`${API_URL}/students/${studentId}/counselings`)
+      }
+      if (!response.ok) {
+        throw new Error('Failed to fetch counseling schedules')
+      }
+      const data = await response.json()
+      setCounselingRequests(data)
+      if (data.length > 0) {
+        setSelectedCalendarDate(formatDateKey(data[0].dateTime))
+      }
+    } catch (err) {
+      console.error('Error fetching counselings:', err)
+      setCounselingRequests([])
+    }
+  }
+
+  const handleCounselingChange = (e) => {
+    const { name, value } = e.target
+    setCounselingForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleCreateCounselingRequest = async (e) => {
+    e.preventDefault()
+    if (!studentData || !studentData.studentId) {
+      setCounselingError('학생 정보를 찾을 수 없습니다.')
+      return
+    }
+    if (!counselingForm.date || !counselingForm.time) {
+      setCounselingError('날짜와 시간을 모두 선택해주세요.')
+      return
+    }
+
+    setCounselingError('')
+    setCounselingSuccess('')
+    setCounselingLoading(true)
+
+    try {
+      const response = await fetch(`${API_URL}/students/${studentData.studentId}/counselings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacherName: user.username || 'teacher1',
+          date: counselingForm.date,
+          time: counselingForm.time
+        })
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to request counseling')
+      }
+      await fetchCounselings()
+      setCounselingSuccess('상담 신청이 접수되었습니다.')
+    } catch (err) {
+      setCounselingError(err.message || '상담 신청에 실패했습니다.')
+    } finally {
+      setCounselingLoading(false)
+    }
+  }
+
+  const handleCounselingStatusUpdate = async (counselingId, status, rejectionReason = '') => {
+    setCounselingLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/counselings/${counselingId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, rejectionReason })
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to update counseling status')
+      }
+      await fetchCounselings()
+      setSelectedCounseling(prev => prev && prev._id === counselingId ? { ...prev, status, rejectionReason } : prev)
+    } catch (err) {
+      console.error('Error updating counseling status:', err)
+      setCounselingError(err.message || '상담 상태 업데이트에 실패했습니다.')
+    } finally {
+      setCounselingLoading(false)
+    }
+  }
+
+  const handleSaveCounselingNotes = async (counselingId, notes) => {
+    setCounselingLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/counselings/${counselingId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherNotes: notes })
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to save counseling notes')
+      }
+      await fetchCounselings()
+      setCounselingSuccess('상담 내용이 저장되었습니다.')
+    } catch (err) {
+      console.error('Error saving counseling notes:', err)
+      setCounselingError(err.message || '상담 내용을 저장하지 못했습니다.')
+    } finally {
+      setCounselingLoading(false)
+    }
+  }
+
+  const handleDateSelect = (dateKey) => {
+    setSelectedCalendarDate(dateKey)
+  }
+
+  const getCounselingsByDate = (dateKey) => {
+    return counselingRequests.filter(item => formatDateKey(item.dateTime) === dateKey)
+  }
+
+  const getCalendarTitle = () => {
+    const monthName = new Date(calendarYear, calendarMonth).toLocaleString('ko-KR', { month: 'long' })
+    return `${calendarYear}년 ${monthName}`
+  }
+
+  const calendarDays = getMonthDays(calendarYear, calendarMonth)
+
+  const handlePrevMonth = () => {
+    const newMonth = calendarMonth - 1
+    if (newMonth < 0) {
+      setCalendarYear(calendarYear - 1)
+      setCalendarMonth(11)
+    } else {
+      setCalendarMonth(newMonth)
+    }
+  }
+
+  const handleNextMonth = () => {
+    const newMonth = calendarMonth + 1
+    if (newMonth > 11) {
+      setCalendarYear(calendarYear + 1)
+      setCalendarMonth(0)
+    } else {
+      setCalendarMonth(newMonth)
+    }
+  }
+
+  const getEventCountForDate = (dateKey) => {
+    return counselingRequests.filter(item => formatDateKey(item.dateTime) === dateKey).length
+  }
+
+  const getSelectedDateRequests = () => {
+    const filtered = getCounselingsByDate(selectedCalendarDate)
+    return filtered.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime))
+  }
+
+  const handleShowCounselingDetails = (counseling) => {
+    setSelectedCounseling(counseling)
+    setShowCounselingModal(true)
+  }
+
+  const handleCounselingFormReset = () => {
+    setCounselingForm({ date: new Date().toISOString().split('T')[0], time: '15:00', note: '' })
+    setCounselingError('')
+    setCounselingSuccess('')
+  }
+
+  const handleTeacherNotesChange = (e) => {
+    if (!selectedCounseling) return
+    setSelectedCounseling({ ...selectedCounseling, teacherNotes: e.target.value })
+  }
+
+  const handleStudentNotesSave = async () => {
+    if (!selectedCounseling) return
+    await handleSaveCounselingNotes(selectedCounseling._id, selectedCounseling.teacherNotes || '')
   }
 
   const handleAddFeedback = async (e) => {
@@ -294,6 +495,10 @@ function App() {
       } else {
         fetchAllStudents()
       }
+    }
+
+    if (activeTab === 'counseling') {
+      fetchCounselings()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user])
@@ -907,6 +1112,23 @@ function App() {
             학생 등록
           </button>
         )}
+        {(user.userType === 'teacher' || user.userType === 'student' || user.userType === 'parent') && (
+          <button 
+            onClick={() => setActiveTab('counseling')}
+            style={{ 
+              padding: '10px 20px',
+              border: 'none',
+              backgroundColor: activeTab === 'counseling' ? '#673AB7' : '#f0f0f0',
+              color: activeTab === 'counseling' ? 'white' : '#333',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: activeTab === 'counseling' ? 'bold' : 'normal'
+            }}
+          >
+            상담
+          </button>
+        )}
         {user.userType === 'teacher' && (
           <button 
             onClick={() => setActiveTab('settings')}
@@ -926,6 +1148,7 @@ function App() {
         )}
       </nav>
             {activeTab === 'search' && renderSearchSection()}
+            {activeTab === 'counseling' && renderCounselingSection()}
       
       {showGradeModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
@@ -1725,6 +1948,188 @@ function App() {
       )}
     </section>
   )
+
+  const renderCounselingSection = () => {
+    const eventDays = counselingRequests.reduce((acc, item) => {
+      const key = formatDateKey(item.dateTime)
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+
+    const selectedRequests = getSelectedDateRequests()
+    const isTeacher = user?.userType === 'teacher'
+    const isStudent = user?.userType === 'student'
+    const isViewer = user?.userType === 'student' || user?.userType === 'parent'
+
+    return (
+      <section>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h2>상담 일정</h2>
+            <p style={{ color: '#555' }}>
+              {isTeacher ? '학생의 상담 신청을 확인하고 승인/거부할 수 있습니다.' : '신청한 상담 일정과 진행 내용을 확인할 수 있습니다.'}
+            </p>
+          </div>
+          {isStudent && (
+            <button onClick={handleCounselingFormReset} style={{ padding: '10px 16px', backgroundColor: '#1976D2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+              상담 신청 초기화
+            </button>
+          )}
+        </div>
+
+        {counselingError && <p style={{ color: 'red', marginBottom: '10px' }}>{counselingError}</p>}
+        {counselingSuccess && <p style={{ color: '#388e3c', marginBottom: '10px' }}>{counselingSuccess}</p>}
+
+        {isStudent && (
+          <form onSubmit={handleCreateCounselingRequest} style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
+            <h3>새 상담 신청</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>상담 날짜</label>
+                <input type="date" name="date" value={counselingForm.date} onChange={handleCounselingChange} style={{ width: '100%', padding: '8px' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>상담 시간</label>
+                <input type="time" name="time" value={counselingForm.time} onChange={handleCounselingChange} style={{ width: '100%', padding: '8px' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>신청 메모 (선택)</label>
+              <textarea name="note" value={counselingForm.note} onChange={handleCounselingChange} rows="3" style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} placeholder="상담에 대한 간단한 내용을 작성하세요."></textarea>
+            </div>
+            <button type="submit" disabled={counselingLoading} style={{ marginTop: '15px', padding: '10px 16px', backgroundColor: counselingLoading ? '#ccc' : '#1976D2', color: 'white', border: 'none', borderRadius: '4px', cursor: counselingLoading ? 'not-allowed' : 'pointer' }}>
+              {counselingLoading ? '신청 중...' : '상담 신청'}
+            </button>
+          </form>
+        )}
+
+        <div style={{ marginBottom: '20px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <div>
+              <h3 style={{ margin: 0 }}>{getCalendarTitle()}</h3>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={handlePrevMonth} type="button" style={{ padding: '6px 12px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer' }}>◀</button>
+              <button onClick={handleNextMonth} type="button" style={{ padding: '6px 12px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer' }}>▶</button>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px' , textAlign: 'center'}}>
+            {['일','월','화','수','목','금','토'].map(day => (
+              <div key={day} style={{ fontWeight: 'bold', padding: '8px 0' }}>{day}</div>
+            ))}
+            {Array(calendarDays[0].getDay()).fill(null).map((_, index) => (
+              <div key={`empty-${index}`} />
+            ))}
+            {calendarDays.map(day => {
+              const dateKey = formatDateKey(day)
+              const count = getEventCountForDate(dateKey)
+              const selected = dateKey === selectedCalendarDate
+              return (
+                <button key={dateKey} type="button" onClick={() => handleDateSelect(dateKey)} style={{
+                  border: selected ? '2px solid #673AB7' : '1px solid #ddd',
+                  backgroundColor: selected ? '#f3e5f5' : '#fff',
+                  padding: '10px',
+                  minHeight: '70px',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}>
+                  <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>{day.getDate()}</div>
+                  {count > 0 && (
+                    <span style={{ display: 'inline-block', marginTop: '4px', padding: '2px 6px', backgroundColor: '#673AB7', color: 'white', borderRadius: '12px', fontSize: '12px' }}>{count}건</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
+            <h3>{selectedCalendarDate} 일정</h3>
+            {selectedRequests.length > 0 ? (
+              selectedRequests.map(item => (
+                <div key={item._id} style={{ marginBottom: '15px', padding: '12px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 'bold' }}>{item.studentName}</p>
+                      <p style={{ margin: '6px 0 0 0', color: '#555' }}>시간: {new Date(item.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                    <button type="button" onClick={() => handleShowCounselingDetails(item)} style={{ padding: '6px 10px', border: 'none', borderRadius: '4px', backgroundColor: '#1976D2', color: 'white', cursor: 'pointer' }}>상세 보기</button>
+                  </div>
+                  <p style={{ margin: '10px 0 0 0' }}>상태: <strong>{item.status === 'pending' ? '대기' : item.status === 'accepted' ? '승인' : '거절'}</strong></p>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: '#555' }}>선택된 날짜에 상담 일정이 없습니다.</p>
+            )}
+          </div>
+          <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
+            <h3>전체 상담 목록</h3>
+            {counselingRequests.length > 0 ? (
+              counselingRequests.slice(0, 10).map(item => (
+                <div key={item._id} style={{ marginBottom: '12px', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fff', cursor: 'pointer' }} onClick={() => { setSelectedCalendarDate(formatDateKey(item.dateTime)); handleShowCounselingDetails(item) }}>
+                  <p style={{ margin: 0, fontWeight: 'bold' }}>{item.studentName} - {new Date(item.dateTime).toLocaleDateString('ko-KR')}</p>
+                  <p style={{ margin: '8px 0 0 0', color: '#555' }}>시간: {new Date(item.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
+                  <p style={{ margin: '4px 0 0 0', color: '#777' }}>상태: {item.status === 'pending' ? '대기' : item.status === 'accepted' ? '승인' : '거절'}</p>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: '#555' }}>등록된 상담 일정이 없습니다.</p>
+            )}
+          </div>
+        </div>
+
+        {showCounselingModal && selectedCounseling && (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
+              <button onClick={() => setShowCounselingModal(false)} aria-label="상담 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+              <h3>상담 상세</h3>
+              <p><strong>학생:</strong> {selectedCounseling.studentName}</p>
+              <p><strong>날짜:</strong> {new Date(selectedCounseling.dateTime).toLocaleDateString('ko-KR')}</p>
+              <p><strong>시간:</strong> {new Date(selectedCounseling.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
+              <p><strong>상태:</strong> {selectedCounseling.status === 'pending' ? '대기' : selectedCounseling.status === 'accepted' ? '승인' : '거절'}</p>
+              {selectedCounseling.rejectionReason && (
+                <p><strong>거절 사유:</strong> {selectedCounseling.rejectionReason}</p>
+              )}
+              {selectedCounseling.studentNote && (
+                <div style={{ marginTop: '10px', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#E3F2FD' }}>
+                  <strong>학생 요청 메모</strong>
+                  <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{selectedCounseling.studentNote}</p>
+                </div>
+              )}
+              {selectedCounseling.teacherNotes && (
+                <div style={{ marginTop: '10px', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f7f7f7' }}>
+                  <strong>상담 내용</strong>
+                  <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{selectedCounseling.teacherNotes}</p>
+                </div>
+              )}
+
+              {isTeacher && (
+                <div style={{ marginTop: '20px' }}>
+                  <h4>교사용 조치</h4>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+                    <button type="button" onClick={() => handleCounselingStatusUpdate(selectedCounseling._id, 'accepted')} style={{ padding: '10px 14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>승인</button>
+                    <button type="button" onClick={() => handleCounselingStatusUpdate(selectedCounseling._id, 'rejected', selectedCounseling.rejectionReason || '일정 조정 필요')} style={{ padding: '10px 14px', backgroundColor: '#F44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>거절</button>
+                  </div>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>거절 사유</label>
+                    <textarea value={selectedCounseling.rejectionReason || ''} onChange={(e) => setSelectedCounseling(prev => prev ? { ...prev, rejectionReason: e.target.value } : prev)} rows="3" style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }} placeholder="거절 사유를 입력하세요."></textarea>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>상담 내용 입력</label>
+                    <textarea value={selectedCounseling.teacherNotes || ''} onChange={handleTeacherNotesChange} rows="5" style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }} placeholder="상담 내용을 입력하세요."></textarea>
+                    <button type="button" onClick={handleStudentNotesSave} disabled={counselingLoading} style={{ marginTop: '10px', padding: '10px 16px', backgroundColor: '#1976D2', color: 'white', border: 'none', borderRadius: '4px', cursor: counselingLoading ? 'not-allowed' : 'pointer' }}>
+                      {counselingLoading ? '저장 중...' : '상담 내용 저장'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    )
+  }
 
   return renderMainApp()
 }
