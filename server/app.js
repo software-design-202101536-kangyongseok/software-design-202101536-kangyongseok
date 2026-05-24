@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // MongoDB 연결
 mongoose
-  .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(mongoURI, {  })
   .then(async () => {
     console.log("MongoDB connected");
     // Initialize default subjects
