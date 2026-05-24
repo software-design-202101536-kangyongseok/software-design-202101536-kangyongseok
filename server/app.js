@@ -5,6 +5,9 @@ const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const mongoURI = process.env.MONGODB_URL;
+if (!mongoURI) {
+  console.error("MONGODB_URL 환경변수가 설정되어 있지 않습니다. MongoDB Atlas 연결 문자열을 설정하세요.");
+}
 const stdRouter = require("./routes/stdRoute");
 const path = require("path");
 
@@ -15,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // MongoDB 연결
 mongoose
-  .connect(mongoURI)
+  .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(async () => {
     console.log("MongoDB connected");
     // Initialize default subjects
