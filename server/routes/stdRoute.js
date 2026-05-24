@@ -132,7 +132,7 @@ const validateStudentData = (data) => {
  * Convert string to MongoDB ObjectId
  */
 const convertToObjectId = (value) => {
-  return mongoose.Types.ObjectId(value);
+  return new mongoose.Types.ObjectId(value);
 };
 
 /**
@@ -493,7 +493,7 @@ stdRouter.post("/grades", async (req, res) => {
 
     const notificationMessage = `${student.name} 학생의 ${subjectValidation.value} ${yearValidation.value}학기 ${termValidation.value}차 성적이 ${scoreValidation.value}점으로 등록되었습니다.`;
     await Notification.create({
-      studentId: mongoose.Types.ObjectId(studentId),
+      studentId: new mongoose.Types.ObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
       message: notificationMessage,
@@ -506,7 +506,7 @@ stdRouter.post("/grades", async (req, res) => {
       }
     });
     await Notification.create({
-      studentId: mongoose.Types.ObjectId(studentId),
+      studentId: new mongoose.Types.ObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
       type: 'grade',
