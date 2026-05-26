@@ -259,6 +259,8 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
   // Try to load a Korean-capable TTF font from common system locations so PDF text isn't garbled
   const tryFonts = () => {
     const candidates = [];
+    // Allow explicit override via environment variable
+    if (process.env.PDF_FONT_PATH) candidates.push(process.env.PDF_FONT_PATH);
     if (process.platform === 'win32') {
       candidates.push('C:\\Windows\\Fonts\\malgun.ttf'); // Malgun Gothic
       candidates.push('C:\\Windows\\Fonts\\malgunbd.ttf');
@@ -267,14 +269,14 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
       candidates.push('/System/Library/Fonts/AppleGothic.ttf');
       candidates.push('/Library/Fonts/AppleGothic.ttf');
     } else {
-      // linux common paths
+      // linux common paths (prefer TTF over TTC)
       candidates.push('/usr/share/fonts/truetype/nanum/NanumGothic.ttf');
-      candidates.push('/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc');
+      candidates.push('/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf');
       candidates.push('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
     }
     for (const p of candidates) {
       try {
-        if (fs.existsSync(p)) return p;
+        if (p && fs.existsSync(p)) return p;
       } catch (e) {
         // ignore
       }
@@ -285,10 +287,20 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
   const fontPath = tryFonts();
   if (fontPath) {
     try {
-      doc.font(fontPath);
+      // register font under a stable name and use it
+      try {
+        doc.registerFont('BaseCJK', fontPath);
+        doc.font('BaseCJK');
+      } catch (regErr) {
+        // fallback to direct path if registerFont fails
+        doc.font(fontPath);
+      }
+      console.log('Using PDF font:', fontPath);
     } catch (e) {
       console.warn('Failed to load font for PDF:', e.message || e);
     }
+  } else {
+    console.warn('No CJK font found for PDF generation; Korean text may be garbled. Set PDF_FONT_PATH to a TTF/OTF file to fix.');
   }
 
   doc.pipe(res);

@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">28.39% </span>
+                <span class="strong">28.69% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>188/662</span>
+                <span class='fraction'>192/669</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">13.91% </span>
+                <span class="strong">14.48% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>59/424</span>
+                <span class='fraction'>62/428</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">29.03% </span>
+                <span class="strong">29.38% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>187/644</span>
+                <span class='fraction'>191/650</span>
             </div>
         
             
@@ -1501,7 +1501,19 @@
 <a name='L1436'></a><a href='#L1436'>1436</a>
 <a name='L1437'></a><a href='#L1437'>1437</a>
 <a name='L1438'></a><a href='#L1438'>1438</a>
-<a name='L1439'></a><a href='#L1439'>1439</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
+<a name='L1439'></a><a href='#L1439'>1439</a>
+<a name='L1440'></a><a href='#L1440'>1440</a>
+<a name='L1441'></a><a href='#L1441'>1441</a>
+<a name='L1442'></a><a href='#L1442'>1442</a>
+<a name='L1443'></a><a href='#L1443'>1443</a>
+<a name='L1444'></a><a href='#L1444'>1444</a>
+<a name='L1445'></a><a href='#L1445'>1445</a>
+<a name='L1446'></a><a href='#L1446'>1446</a>
+<a name='L1447'></a><a href='#L1447'>1447</a>
+<a name='L1448'></a><a href='#L1448'>1448</a>
+<a name='L1449'></a><a href='#L1449'>1449</a>
+<a name='L1450'></a><a href='#L1450'>1450</a>
+<a name='L1451'></a><a href='#L1451'>1451</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
@@ -1762,6 +1774,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -1788,10 +1802,20 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
@@ -3200,6 +3224,8 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) =&gt; 
   // Try to load a Korean-capable TTF font from common system locations so PDF text isn't garbled
   const tryFonts = () =&gt; {
     const candidates = [];
+    // Allow explicit override via environment variable
+    <span class="missing-if-branch" title="if path not taken" >I</span>if (process.env.PDF_FONT_PATH) <span class="cstat-no" title="statement not covered" >candidates.push(process.env.PDF_FONT_PATH);</span>
     if (process.platform === 'win32') {
       candidates.push('C:\\Windows\\Fonts\\malgun.ttf'); // Malgun Gothic
       candidates.push('C:\\Windows\\Fonts\\malgunbd.ttf');
@@ -3208,14 +3234,14 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) =&gt; 
 <span class="cstat-no" title="statement not covered" >      candidates.push('/System/Library/Fonts/AppleGothic.ttf');</span>
 <span class="cstat-no" title="statement not covered" >      candidates.push('/Library/Fonts/AppleGothic.ttf');</span>
     } else {
-      // linux common paths
+      // linux common paths (prefer TTF over TTC)
 <span class="cstat-no" title="statement not covered" >      candidates.push('/usr/share/fonts/truetype/nanum/NanumGothic.ttf');</span>
-<span class="cstat-no" title="statement not covered" >      candidates.push('/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc');</span>
+<span class="cstat-no" title="statement not covered" >      candidates.push('/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf');</span>
 <span class="cstat-no" title="statement not covered" >      candidates.push('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');</span>
     }
     for (const p of candidates) {
       try {
-        <span class="missing-if-branch" title="else path not taken" >E</span>if (fs.existsSync(p)) return p;
+        <span class="missing-if-branch" title="else path not taken" >E</span>if (p &amp;&amp; fs.existsSync(p)) return p;
       } catch (e) {
         // ignore
       }
@@ -3224,12 +3250,22 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) =&gt; 
   };
 &nbsp;
   const fontPath = tryFonts();
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (fontPath) {
+  if (fontPath) {
     try {
-      doc.font(fontPath);
+      // register font under a stable name and use it
+      try {
+        doc.registerFont('BaseCJK', fontPath);
+        doc.font('BaseCJK');
+      } catch (regErr) {
+        // fallback to direct path if registerFont fails
+<span class="cstat-no" title="statement not covered" >        doc.font(fontPath);</span>
+      }
+      console.log('Using PDF font:', fontPath);
     } catch (e) {
 <span class="cstat-no" title="statement not covered" >      console.warn('Failed to load font for PDF:', e.message || e);</span>
     }
+  } else <span class="missing-if-branch" title="else path not taken" >E</span>{
+<span class="cstat-no" title="statement not covered" >    console.warn('No CJK font found for PDF generation; Korean text may be garbled. Set PDF_FONT_PATH to a TTF/OTF file to fix.');</span>
   }
 &nbsp;
   doc.pipe(res);
@@ -4384,7 +4420,7 @@ module.exports = stdRouter;</pre></td></tr></table></pre>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-05-26T04:22:20.298Z
+                at 2026-05-26T04:27:49.942Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
