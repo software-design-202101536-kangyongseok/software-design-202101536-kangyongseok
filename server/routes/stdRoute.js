@@ -11,6 +11,8 @@ const Notification = require("../models/notification");
 const Counseling = require("../models/counseling");
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const fs = require('fs');
+const path = require('path');
 
 // ==================== Input Validation Utilities ====================
 /**
@@ -254,6 +256,41 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
   const safeFilename = String(filename).replace(/["]+/g, '_').replace(/[\r\n]+/g, '_');
   const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
   res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
+  // Try to load a Korean-capable TTF font from common system locations so PDF text isn't garbled
+  const tryFonts = () => {
+    const candidates = [];
+    if (process.platform === 'win32') {
+      candidates.push('C:\\Windows\\Fonts\\malgun.ttf'); // Malgun Gothic
+      candidates.push('C:\\Windows\\Fonts\\malgunbd.ttf');
+      candidates.push('C:\\Windows\\Fonts\\Batang.ttf');
+    } else if (process.platform === 'darwin') {
+      candidates.push('/System/Library/Fonts/AppleGothic.ttf');
+      candidates.push('/Library/Fonts/AppleGothic.ttf');
+    } else {
+      // linux common paths
+      candidates.push('/usr/share/fonts/truetype/nanum/NanumGothic.ttf');
+      candidates.push('/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc');
+      candidates.push('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+    }
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p)) return p;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return null;
+  };
+
+  const fontPath = tryFonts();
+  if (fontPath) {
+    try {
+      doc.font(fontPath);
+    } catch (e) {
+      console.warn('Failed to load font for PDF:', e.message || e);
+    }
+  }
+
   doc.pipe(res);
 
   doc.fontSize(18).text(`${reportData.student.name} 학생 ${reportLabel} 보고서`, { underline: true });
