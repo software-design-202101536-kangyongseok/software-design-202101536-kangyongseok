@@ -259,29 +259,60 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
   // Try to load a Korean-capable TTF font from common system locations so PDF text isn't garbled
   const tryFonts = () => {
     const candidates = [];
-    // Allow explicit override via environment variable
+    const localFontPath = path.join(__dirname, 'fonts', 'NotoSansKR-Regular.otf');
+    if (fs.existsSync(localFontPath)) {
+      return localFontPath;
+    }
     if (process.env.PDF_FONT_PATH) candidates.push(process.env.PDF_FONT_PATH);
     if (process.platform === 'win32') {
-      candidates.push('C:\\Windows\\Fonts\\malgun.ttf'); // Malgun Gothic
+      candidates.push('C:\\Windows\\Fonts\\malgun.ttf');
       candidates.push('C:\\Windows\\Fonts\\malgunbd.ttf');
       candidates.push('C:\\Windows\\Fonts\\Batang.ttf');
+      candidates.push('C:\\Windows\\Fonts\\UnBatang.ttf');
     } else if (process.platform === 'darwin') {
       candidates.push('/System/Library/Fonts/AppleGothic.ttf');
       candidates.push('/Library/Fonts/AppleGothic.ttf');
+      candidates.push('/Library/Fonts/NotoSansKR-Regular.otf');
     } else {
-      // linux common paths (prefer TTF over TTC)
-      candidates.push('/usr/share/fonts/truetype/nanum/NanumGothic.ttf');
-      candidates.push('/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf');
-      candidates.push('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
+      candidates.push('/usr/share/fonts');
+      candidates.push('/usr/local/share/fonts');
     }
-    for (const p of candidates) {
+
+    const fontFiles = [];
+    const addFontFile = (p) => {
       try {
-        if (p && fs.existsSync(p)) return p;
+        const stat = fs.statSync(p);
+        if (stat.isFile() && /\.(ttf|otf)$/i.test(p)) {
+          fontFiles.push(p);
+        } else if (stat.isDirectory()) {
+          for (const entry of fs.readdirSync(p)) {
+            addFontFile(path.join(p, entry));
+          }
+        }
       } catch (e) {
-        // ignore
+        // ignore missing paths or permission issues
       }
+    };
+
+    const preferredPatterns = [
+      /nanum/i,
+      /notosanskr/i,
+      /notosanscjk/i,
+      /malgun/i,
+      /batang/i,
+      /unbatang/i,
+    ];
+
+    for (const candidate of candidates) {
+      addFontFile(candidate);
     }
-    return null;
+
+    for (const pattern of preferredPatterns) {
+      const match = fontFiles.find((file) => pattern.test(path.basename(file)));
+      if (match) return match;
+    }
+
+    return fontFiles.length ? fontFiles[0] : null;
   };
 
   const fontPath = tryFonts();
