@@ -2347,6 +2347,91 @@ function App() {
 
 
 
+  // 새 등수 계산기: 학생별 최신 성적만 한 번만 고려하여 등수 산출
+  // 등수: 동일 학기(year+term)에서 같은 과목을 본 학생들 사이의 등수로 계산
+  const getRankForStudent = (subject, score, studentId = null, year = null, term = null) => {
+    if (!allStudents.length) return '-'
+
+    // 특정 학기 정보가 없으면 기존 동작(학생 최신) 대신 전체 최신을 사용
+    if (year === null || term === null) {
+      // fallback: 기존 최신 기반 계산
+      const perStudentLatest = []
+      allStudents.forEach(student => {
+        let latest = null
+        (student.grades || []).forEach(g => {
+          if (g.subject !== subject) return
+          const termKey = (Number(g.year) || 0) * 10 + (Number(g.term) || 0)
+          if (!latest || termKey > latest.termKey) latest = { score: Number(g.score) || 0, termKey }
+        })
+        if (latest) perStudentLatest.push({ id: student._id || student.id || student.studentId, score: latest.score })
+      })
+      if (perStudentLatest.length === 0) return '-'
+      const scores = perStudentLatest.map(s => s.score).sort((a, b) => b - a)
+      let targetScore = score
+      if (studentId) {
+        const found = perStudentLatest.find(s => String(s.id) === String(studentId))
+        if (found) targetScore = found.score
+      }
+      const rank = scores.indexOf(Number(targetScore)) + 1
+      return `${rank}/${scores.length}`
+    }
+
+    // 학기(year, term) 기준으로 각 학생이 해당 학기 동일 과목을 봤는지 확인하여 점수 리스트 구성
+    const perStudentTermScores = []
+    allStudents.forEach(student => {
+      const g = (student.grades || []).find(x => String(x.subject) === String(subject) && Number(x.year) === Number(year) && Number(x.term) === Number(term))
+      if (g) perStudentTermScores.push({ id: student._id || student.id || student.studentId, score: Number(g.score) || 0 })
+    })
+
+    if (perStudentTermScores.length === 0) return '-'
+    const scores = perStudentTermScores.map(s => s.score).sort((a, b) => b - a)
+
+    let targetScore = score
+    if (studentId) {
+      const found = perStudentTermScores.find(s => String(s.id) === String(studentId))
+      if (found) targetScore = found.score
+    }
+
+    const rank = scores.indexOf(Number(targetScore)) + 1
+    return `${rank}/${scores.length}`
+  }
+
+  // 보고서 보기(새 탭으로 PDF 열기)
+  const viewReport = (reportType) => {
+    if (!studentData || !studentData.studentId) {
+      alert('학생 정보가 없습니다.')
+      return
+    }
+    const url = `${API_URL}/students/${studentData.studentId}/reports/${reportType}?format=pdf`
+    window.open(url, '_blank')
+  }
+
+  // 보고서 다운로드 (pdf 또는 xlsx)
+  const downloadReport = async (reportType, format = 'xlsx') => {
+    if (!studentData || !studentData.studentId) {
+      alert('학생 정보가 없습니다.')
+      return
+    }
+    try {
+      const res = await fetch(`${API_URL}/students/${studentData.studentId}/reports/${reportType}?format=${format}`)
+      if (!res.ok) throw new Error('서버에서 파일을 가져오지 못했습니다.')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const ext = format === 'pdf' ? 'pdf' : 'xlsx'
+      const namePart = (studentData.username || studentData.studentName || 'student').replace(/\s+/g, '_')
+      a.download = `${namePart}-${reportType}.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      alert('다운로드 중 오류가 발생했습니다.')
+    }
+  }
+
   const getRadarChartData = (grades) => {
     const latestBySubject = {}
 
@@ -7360,6 +7445,27 @@ function App() {
 
             <p><strong>자기소개:</strong> {studentData.bio}</p>
 
+            <div style={{ marginTop: '12px', padding: '10px', background: '#f7f7f7', borderRadius: '6px' }}>
+              <strong>보고서</strong>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '13px', marginBottom: '6px' }}>성적 분석</div>
+                  <button onClick={() => viewReport('grade-analysis')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
+                  <button onClick={() => downloadReport('grade-analysis', 'xlsx')}>다운로드 (XLSX)</button>
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', marginBottom: '6px' }}>상담 내역</div>
+                  <button onClick={() => viewReport('counseling-history')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
+                  <button onClick={() => downloadReport('counseling-history', 'xlsx')}>다운로드 (XLSX)</button>
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', marginBottom: '6px' }}>피드백 요약</div>
+                  <button onClick={() => viewReport('feedback-summary')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
+                  <button onClick={() => downloadReport('feedback-summary', 'xlsx')}>다운로드 (XLSX)</button>
+                </div>
+              </div>
+            </div>
+
 
 
             <h3>출석 {user.userType === 'teacher' && <button onClick={() => setShowAttendanceModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>출석 입력</button>}</h3>
@@ -7700,7 +7806,7 @@ function App() {
 
 
 
-                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getRank(grade.subject, grade.score)}</td>
+                          <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{getRankForStudent(grade.subject, grade.score, studentData?.studentId, grade.year, grade.term)}</td>
 
 
 
