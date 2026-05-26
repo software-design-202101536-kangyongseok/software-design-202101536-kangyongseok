@@ -274,8 +274,12 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
       candidates.push('/Library/Fonts/AppleGothic.ttf');
       candidates.push('/Library/Fonts/NotoSansKR-Regular.otf');
     } else {
-      candidates.push('/usr/share/fonts');
+      candidates.push('/usr/share/fonts/truetype');
+      candidates.push('/usr/share/fonts/opentype');
       candidates.push('/usr/local/share/fonts');
+      candidates.push('/usr/share/fonts/truetype/noto');
+      candidates.push('/usr/share/fonts/truetype/nanum');
+      candidates.push('/usr/share/fonts/truetype/dejavu');
     }
 
     const fontFiles = [];
@@ -312,7 +316,10 @@ const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
       if (match) return match;
     }
 
-    return fontFiles.length ? fontFiles[0] : null;
+    // Do not fall back to an arbitrary font. If a CJK-capable font is not found,
+    // return null so the caller can warn and avoid silently using a font that
+    // will garble Korean text.
+    return null;
   };
 
   const fontPath = tryFonts();
