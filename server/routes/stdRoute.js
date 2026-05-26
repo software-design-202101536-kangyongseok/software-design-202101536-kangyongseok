@@ -251,7 +251,9 @@ const buildStudentReportData = async (studentId) => {
 const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
   const doc = new PDFDocument({ size: 'A4', margin: 40 });
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const safeFilename = String(filename).replace(/["]+/g, '_').replace(/[\r\n]+/g, '_');
+  const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
+  res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
   doc.pipe(res);
 
   doc.fontSize(18).text(`${reportData.student.name} 학생 ${reportLabel} 보고서`, { underline: true });
@@ -379,7 +381,9 @@ const generateExcelStudentReport = async (res, reportData, reportLabel, filename
 
   const buffer = await workbook.xlsx.writeBuffer();
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const safeFilename = String(filename).replace(/["]+/g, '_').replace(/[\r\n]+/g, '_');
+  const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
+  res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
   res.send(Buffer.from(buffer));
 };
 

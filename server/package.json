@@ -16,10 +16,10 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "ejs": "^5.0.1",
-    "exceljs": "^4.3.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "pdfkit": "^0.13.0",
-    "mongoose": "^9.3.3"
+    "mongoose": "^9.3.3",
+    "pdfkit": "^0.13.0"
   },
   "devDependencies": {
     "jest": "^30.3.0",
