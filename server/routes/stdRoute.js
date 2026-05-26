@@ -9,6 +9,8 @@ const User = require("../models/user");
 const Feedback = require("../models/feedback");
 const Notification = require("../models/notification");
 const Counseling = require("../models/counseling");
+const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
 
 // ==================== Input Validation Utilities ====================
 /**
@@ -196,6 +198,189 @@ const buildStudentResponse = async (student, subjectFilter) => {
     termAverages: termAverages,
     subjectAverage: subjectAverage,
   };
+};
+
+const formatKoreanDateTime = (value) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getGradeSummary = (grades) => {
+  const summary = {
+    totalScore: 0,
+    subjects: {}
+  };
+
+  grades.forEach((grade) => {
+    const score = Number(grade.score) || 0;
+    summary.totalScore += score;
+    if (!summary.subjects[grade.subject]) {
+      summary.subjects[grade.subject] = { total: 0, count: 0 };
+    }
+    summary.subjects[grade.subject].total += score;
+    summary.subjects[grade.subject].count += 1;
+  });
+
+  return {
+    overallAverage: grades.length ? (summary.totalScore / grades.length).toFixed(2) : '0.00',
+    subjectAverages: Object.entries(summary.subjects).map(([subject, data]) => ({
+      subject,
+      average: data.count ? (data.total / data.count).toFixed(2) : '0.00'
+    }))
+  };
+};
+
+const buildStudentReportData = async (studentId) => {
+  const student = await Student.findById(studentId);
+  if (!student) return null;
+
+  const grades = await Grade.find({ student: student._id }).sort({ year: -1, term: 1, subject: 1 });
+  const counselings = await Counseling.find({ studentId: student._id }).sort({ dateTime: 1 });
+  const feedbacks = await Feedback.find({ studentId: student._id }).sort({ createdAt: -1 });
+
+  return { student, grades, counselings, feedbacks };
+};
+
+const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
+  const doc = new PDFDocument({ size: 'A4', margin: 40 });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  doc.pipe(res);
+
+  doc.fontSize(18).text(`${reportData.student.name} 학생 ${reportLabel} 보고서`, { underline: true });
+  doc.moveDown();
+  doc.fontSize(12).text(`생년월일: ${new Date(reportData.student.birthDate).toLocaleDateString('ko-KR')}`);
+  doc.text(`성별: ${reportData.student.gender === 'male' ? '남성' : '여성'}`);
+  doc.text(`작성일: ${new Date().toLocaleString('ko-KR')}`);
+  doc.moveDown();
+
+  if (reportLabel === '성적 분석') {
+    const summary = getGradeSummary(reportData.grades);
+    doc.fontSize(14).text('성적 요약');
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`전체 과목 수: ${reportData.grades.length}`);
+    doc.text(`평균 점수: ${summary.overallAverage}`);
+    doc.moveDown(0.5);
+    if (summary.subjectAverages.length) {
+      summary.subjectAverages.forEach((item) => {
+        doc.text(`- ${item.subject}: ${item.average}`);
+      });
+    } else {
+      doc.text('등록된 성적이 없습니다.');
+    }
+    doc.moveDown();
+    doc.fontSize(14).text('상세 성적 목록');
+    doc.moveDown(0.5);
+    reportData.grades.forEach((grade) => {
+      doc.text(`${grade.year} Term ${grade.term} | ${grade.subject} | 점수: ${grade.score}`);
+    });
+  } else if (reportLabel === '상담 내역') {
+    doc.fontSize(14).text('상담 내역');
+    doc.moveDown(0.5);
+    if (!reportData.counselings.length) {
+      doc.text('등록된 상담 내역이 없습니다.');
+    }
+    reportData.counselings.forEach((counseling) => {
+      doc.text(`- ${formatKoreanDateTime(counseling.dateTime)} | 상태: ${counseling.status} | 교사: ${counseling.teacherName}`);
+      if (counseling.studentNote) doc.text(`  학생 메모: ${counseling.studentNote}`);
+      if (counseling.teacherNotes) doc.text(`  교사 메모: ${counseling.teacherNotes}`);
+      if (counseling.rejectionReason) doc.text(`  거절 사유: ${counseling.rejectionReason}`);
+      doc.moveDown(0.5);
+    });
+  } else if (reportLabel === '피드백 요약') {
+    doc.fontSize(14).text('피드백 요약');
+    doc.moveDown(0.5);
+    if (!reportData.feedbacks.length) {
+      doc.text('등록된 피드백이 없습니다.');
+    }
+    reportData.feedbacks.forEach((feedback, index) => {
+      doc.text(`${index + 1}. 작성일: ${formatKoreanDateTime(feedback.createdAt)} | 교사: ${feedback.teacherName}`);
+      if (feedback.academicPerformance) doc.text(`  학업 성과: ${feedback.academicPerformance}`);
+      if (feedback.attendance) doc.text(`  출결: ${feedback.attendance}`);
+      if (feedback.behavior) doc.text(`  행동: ${feedback.behavior}`);
+      if (feedback.attitude) doc.text(`  태도: ${feedback.attitude}`);
+      if (feedback.additionalComments) doc.text(`  추가 의견: ${feedback.additionalComments}`);
+      doc.text(`  공유 여부: ${feedback.shareWithTeachers ? '공유' : '비공유'}`);
+      doc.moveDown(0.5);
+    });
+  }
+
+  doc.end();
+};
+
+const generateExcelStudentReport = async (res, reportData, reportLabel, filename) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Report');
+  sheet.addRow([`${reportData.student.name} 학생 ${reportLabel} 보고서`]);
+  sheet.addRow([`생년월일: ${new Date(reportData.student.birthDate).toLocaleDateString('ko-KR')}`]);
+  sheet.addRow([`성별: ${reportData.student.gender === 'male' ? '남성' : '여성'}`]);
+  sheet.addRow([`작성일: ${new Date().toLocaleString('ko-KR')}`]);
+  sheet.addRow([]);
+
+  if (reportLabel === '성적 분석') {
+    sheet.columns = [
+      { header: '과목', key: 'subject', width: 18 },
+      { header: '학기', key: 'term', width: 14 },
+      { header: '점수', key: 'score', width: 10 }
+    ];
+    reportData.grades.forEach((grade) => {
+      sheet.addRow({ subject: grade.subject, term: `${grade.year} Term ${grade.term}`, score: grade.score });
+    });
+  } else if (reportLabel === '상담 내역') {
+    sheet.columns = [
+      { header: '상담 일시', key: 'dateTime', width: 24 },
+      { header: '상태', key: 'status', width: 12 },
+      { header: '교사', key: 'teacher', width: 16 },
+      { header: '학생 메모', key: 'studentNote', width: 30 },
+      { header: '교사 메모', key: 'teacherNotes', width: 30 },
+      { header: '거절 사유', key: 'rejectionReason', width: 30 }
+    ];
+    reportData.counselings.forEach((counseling) => {
+      sheet.addRow({
+        dateTime: formatKoreanDateTime(counseling.dateTime),
+        status: counseling.status,
+        teacher: counseling.teacherName,
+        studentNote: counseling.studentNote || '',
+        teacherNotes: counseling.teacherNotes || '',
+        rejectionReason: counseling.rejectionReason || ''
+      });
+    });
+  } else if (reportLabel === '피드백 요약') {
+    sheet.columns = [
+      { header: '작성일', key: 'createdAt', width: 24 },
+      { header: '교사', key: 'teacherName', width: 16 },
+      { header: '학업 성과', key: 'academicPerformance', width: 24 },
+      { header: '출결', key: 'attendance', width: 20 },
+      { header: '행동', key: 'behavior', width: 20 },
+      { header: '태도', key: 'attitude', width: 20 },
+      { header: '추가 의견', key: 'additionalComments', width: 30 },
+      { header: '공유 여부', key: 'shareWithTeachers', width: 14 }
+    ];
+    reportData.feedbacks.forEach((feedback) => {
+      sheet.addRow({
+        createdAt: formatKoreanDateTime(feedback.createdAt),
+        teacherName: feedback.teacherName,
+        academicPerformance: feedback.academicPerformance || '',
+        attendance: feedback.attendance || '',
+        behavior: feedback.behavior || '',
+        attitude: feedback.attitude || '',
+        additionalComments: feedback.additionalComments || '',
+        shareWithTeachers: feedback.shareWithTeachers ? '공유' : '비공유'
+      });
+    });
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(Buffer.from(buffer));
 };
 
 /**
@@ -1165,6 +1350,48 @@ stdRouter.delete("/feedbacks/:feedbackId", async (req, res) => {
     res.status(500).json({ 
       message: err.message || 'Failed to delete feedback' 
     });
+  }
+});
+
+stdRouter.get("/:studentId/reports/:reportType", async (req, res) => {
+  try {
+    const { studentId, reportType } = req.params;
+    const format = String(req.query.format || 'pdf').toLowerCase();
+
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid student ID is required' });
+    }
+
+    const allowedReports = {
+      'grade-analysis': '성적 분석',
+      'counseling-history': '상담 내역',
+      'feedback-summary': '피드백 요약'
+    };
+
+    const reportLabel = allowedReports[reportType];
+    if (!reportLabel) {
+      return res.status(400).json({ message: 'Invalid report type' });
+    }
+
+    if (!['pdf', 'xlsx'].includes(format)) {
+      return res.status(400).json({ message: 'Invalid format; must be pdf or xlsx' });
+    }
+
+    const reportData = await buildStudentReportData(convertToObjectId(studentId));
+    if (!reportData) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const filename = `${reportData.student.name}-${reportLabel}.${format}`.replace(/\s+/g, '_');
+
+    if (format === 'pdf') {
+      return generatePdfStudentReport(res, reportData, reportLabel, filename);
+    }
+
+    return await generateExcelStudentReport(res, reportData, reportLabel, filename);
+  } catch (err) {
+    console.error('Error generating report:', err);
+    res.status(500).json({ message: err.message || 'Failed to generate report' });
   }
 });
 

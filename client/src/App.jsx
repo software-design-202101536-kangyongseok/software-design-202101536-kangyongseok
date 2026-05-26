@@ -2347,6 +2347,125 @@ function App() {
 
 
 
+  const getRadarChartData = (grades) => {
+    const latestBySubject = {}
+
+    grades.forEach((grade) => {
+      const subject = grade.subject || 'Unknown'
+      const termKey = Number(grade.year) * 10 + Number(grade.term)
+      if (!latestBySubject[subject] || termKey > latestBySubject[subject].termKey) {
+        latestBySubject[subject] = {
+          subject,
+          score: Number(grade.score) || 0,
+          termKey
+        }
+      }
+    })
+
+    return Object.values(latestBySubject)
+      .sort((a, b) => a.subject.localeCompare(b.subject))
+      .map(({ subject, score }) => ({ subject, score }))
+  }
+
+  const renderGradeRadarChart = (grades) => {
+    const data = getRadarChartData(grades)
+    if (!data.length) {
+      return <p style={{ color: '#666', marginTop: '8px' }}>성적이 없어 레이더 차트를 표시할 수 없습니다.</p>
+    }
+
+    const size = 260
+    const center = size / 2
+    const maxRadius = 100
+    const stepCount = 5
+    const angleStep = (Math.PI * 2) / data.length
+
+    const gridLines = Array.from({ length: stepCount }, (_, index) => {
+      const radius = ((index + 1) / stepCount) * maxRadius
+      return (
+        <circle
+          key={`grid-${index}`}
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#ddd"
+          strokeWidth="1"
+        />
+      )
+    })
+
+    const axisLines = data.map((item, index) => {
+      const angle = angleStep * index - Math.PI / 2
+      const x = center + Math.cos(angle) * maxRadius
+      const y = center + Math.sin(angle) * maxRadius
+      return (
+        <line
+          key={`axis-${item.subject}`}
+          x1={center}
+          y1={center}
+          x2={x}
+          y2={y}
+          stroke="#bbb"
+          strokeWidth="1"
+        />
+      )
+    })
+
+    const polygonPoints = data.map((item, index) => {
+      const angle = angleStep * index - Math.PI / 2
+      const radius = (Number(item.score) / 100) * maxRadius
+      const x = center + Math.cos(angle) * radius
+      const y = center + Math.sin(angle) * radius
+      return `${x},${y}`
+    }).join(' ')
+
+    const labels = data.map((item, index) => {
+      const angle = angleStep * index - Math.PI / 2
+      const x = center + Math.cos(angle) * (maxRadius + 18)
+      const y = center + Math.sin(angle) * (maxRadius + 18)
+      const textAnchor = Math.abs(Math.cos(angle)) < 0.1 ? 'middle' : Math.cos(angle) > 0 ? 'start' : 'end'
+      const dy = Math.sin(angle) > 0.2 ? '0.9em' : Math.sin(angle) < -0.2 ? '-0.3em' : '0.35em'
+      return (
+        <text key={`label-${item.subject}`} x={x} y={y} textAnchor={textAnchor} dy={dy} style={{ fontSize: '12px', fill: '#333' }}>
+          {item.subject}
+        </text>
+      )
+    })
+
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+        <svg width={size} height={size} style={{ display: 'block' }}>
+          {gridLines}
+          {axisLines}
+          <polygon
+            points={polygonPoints}
+            fill="rgba(33, 150, 243, 0.25)"
+            stroke="#1976D2"
+            strokeWidth="2"
+          />
+          {data.map((item, index) => {
+            const angle = angleStep * index - Math.PI / 2
+            const radius = (Number(item.score) / 100) * maxRadius
+            const x = center + Math.cos(angle) * radius
+            const y = center + Math.sin(angle) * radius
+            return (
+              <circle
+                key={`dot-${item.subject}`}
+                cx={x}
+                cy={y}
+                r="4"
+                fill="#1976D2"
+                stroke="#fff"
+                strokeWidth="1.5"
+              />
+            )
+          })}
+          {labels}
+        </svg>
+      </div>
+    )
+  }
+
   const handleGradeScaleChange = (grade, value) => {
 
 
@@ -7292,6 +7411,12 @@ function App() {
 
 
             <h3>성적 {user.userType === 'teacher' && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
+            {studentData.grades.length > 0 && (
+              <div style={{ marginTop: '15px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8fbff' }}>
+                <h4 style={{ margin: '0 0 10px 0' }}>전 과목 성적 레이더 차트</h4>
+                {renderGradeRadarChart(studentData.grades)}
+              </div>
+            )}
 
 
 
