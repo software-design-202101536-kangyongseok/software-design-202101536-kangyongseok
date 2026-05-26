@@ -603,7 +603,10 @@ stdRouter.post("/:studentId/counselings", async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const dateTime = new Date(`${dateValidation.value.toISOString().split('T')[0]}T${timeValidation.value}:00`);
+    const year = dateValidation.value.getFullYear();
+    const month = String(dateValidation.value.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValidation.value.getDate()).padStart(2, '0');
+    const dateTime = new Date(`${year}-${month}-${day}T${timeValidation.value}:00`);
     if (Number.isNaN(dateTime.getTime())) {
       return res.status(400).json({ message: 'Invalid date/time combination' });
     }
@@ -641,6 +644,16 @@ stdRouter.post("/:studentId/counselings", async (req, res) => {
   }
 });
 
+stdRouter.get("/teacher/counselings", async (req, res) => {
+  try {
+    const counselings = await Counseling.find({}).sort({ dateTime: 1 });
+    res.status(200).json(counselings);
+  } catch (err) {
+    console.error('Error fetching teacher counselings:', err);
+    res.status(500).json({ message: err.message || 'Failed to fetch counseling requests' });
+  }
+});
+
 stdRouter.get("/:studentId/counselings", async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -653,16 +666,6 @@ stdRouter.get("/:studentId/counselings", async (req, res) => {
     res.status(200).json(counselings);
   } catch (err) {
     console.error('Error fetching counselings:', err);
-    res.status(500).json({ message: err.message || 'Failed to fetch counseling requests' });
-  }
-});
-
-stdRouter.get("/teacher/counselings", async (req, res) => {
-  try {
-    const counselings = await Counseling.find({}).sort({ dateTime: 1 });
-    res.status(200).json(counselings);
-  } catch (err) {
-    console.error('Error fetching teacher counselings:', err);
     res.status(500).json({ message: err.message || 'Failed to fetch counseling requests' });
   }
 });

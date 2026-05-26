@@ -846,7 +846,13 @@ function App() {
 
 
 
-    return d.toISOString().split('T')[0]
+    if (Number.isNaN(d.getTime())) return ''
+
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
 
 
 
@@ -866,7 +872,10 @@ function App() {
 
 
 
-    return Number.isNaN(d.getTime()) ? dateKey : d.toLocaleDateString('ko-KR')
+    if (Number.isNaN(d.getTime())) return dateKey
+    const [year, month, day] = String(dateKey).split('-')
+    if (!year || !month || !day) return dateKey
+    return `${year}년 ${Number(month)}월 ${Number(day)}일`
 
 
 
