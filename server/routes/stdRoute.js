@@ -9,10 +9,7 @@ const User = require("../models/user");
 const Feedback = require("../models/feedback");
 const Notification = require("../models/notification");
 const Counseling = require("../models/counseling");
-const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-const fs = require('fs');
-const path = require('path');
 
 // ==================== Input Validation Utilities ====================
 /**
@@ -239,6 +236,41 @@ const getGradeSummary = (grades) => {
   };
 };
 
+const calculateTermAverages = (grades) => {
+  const termMap = {};
+  grades.forEach((grade) => {
+    const key = `${grade.year}-${grade.term}`;
+    if (!termMap[key]) {
+      termMap[key] = { year: grade.year, term: grade.term, total: 0, count: 0 };
+    }
+    termMap[key].total += Number(grade.score) || 0;
+    termMap[key].count += 1;
+  });
+
+  return Object.values(termMap)
+    .map((item) => ({
+      year: item.year,
+      term: item.term,
+      average: item.count ? (item.total / item.count).toFixed(2) : '0.00'
+    }))
+    .sort((a, b) => (a.year * 10 + a.term) - (b.year * 10 + b.term));
+};
+
+const calculateSubjectRanks = async (grades) => {
+  const rankMap = {};
+  await Promise.all(grades.map(async (grade) => {
+    const subject = grade.subject;
+    const year = Number(grade.year);
+    const term = Number(grade.term);
+    const score = Number(grade.score) || 0;
+
+    const totalCount = await Grade.countDocuments({ subject, year, term });
+    const higherCount = await Grade.countDocuments({ subject, year, term, score: { $gt: score } });
+    rankMap[grade._id.toString()] = `${higherCount + 1}/${totalCount}`;
+  }));
+  return rankMap;
+};
+
 const buildStudentReportData = async (studentId) => {
   const student = await Student.findById(studentId);
   if (!student) return null;
@@ -246,162 +278,9 @@ const buildStudentReportData = async (studentId) => {
   const grades = await Grade.find({ student: student._id }).sort({ year: -1, term: 1, subject: 1 });
   const counselings = await Counseling.find({ studentId: student._id }).sort({ dateTime: 1 });
   const feedbacks = await Feedback.find({ studentId: student._id }).sort({ createdAt: -1 });
+  const termAverages = calculateTermAverages(grades);
 
-  return { student, grades, counselings, feedbacks };
-};
-
-const generatePdfStudentReport = (res, reportData, reportLabel, filename) => {
-  const doc = new PDFDocument({ size: 'A4', margin: 40 });
-  res.setHeader('Content-Type', 'application/pdf');
-  const safeFilename = String(filename).replace(/["]+/g, '_').replace(/[\r\n]+/g, '_');
-  const asciiFilename = safeFilename.replace(/[^\x20-\x7E]/g, '_');
-  res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
-  // Try to load a Korean-capable TTF font from common system locations so PDF text isn't garbled
-  const tryFonts = () => {
-    const candidates = [];
-    const localFontPath = path.join(__dirname, 'fonts', 'NotoSansKR-Regular.otf');
-    if (fs.existsSync(localFontPath)) {
-      return localFontPath;
-    }
-    if (process.env.PDF_FONT_PATH) candidates.push(process.env.PDF_FONT_PATH);
-    if (process.platform === 'win32') {
-      candidates.push('C:\\Windows\\Fonts\\malgun.ttf');
-      candidates.push('C:\\Windows\\Fonts\\malgunbd.ttf');
-      candidates.push('C:\\Windows\\Fonts\\Batang.ttf');
-      candidates.push('C:\\Windows\\Fonts\\UnBatang.ttf');
-    } else if (process.platform === 'darwin') {
-      candidates.push('/System/Library/Fonts/AppleGothic.ttf');
-      candidates.push('/Library/Fonts/AppleGothic.ttf');
-      candidates.push('/Library/Fonts/NotoSansKR-Regular.otf');
-    } else {
-      candidates.push('/usr/share/fonts/truetype');
-      candidates.push('/usr/share/fonts/opentype');
-      candidates.push('/usr/local/share/fonts');
-      candidates.push('/usr/share/fonts/truetype/noto');
-      candidates.push('/usr/share/fonts/truetype/nanum');
-      candidates.push('/usr/share/fonts/truetype/dejavu');
-    }
-
-    const fontFiles = [];
-    const addFontFile = (p) => {
-      try {
-        const stat = fs.statSync(p);
-        if (stat.isFile() && /\.(ttf|otf)$/i.test(p)) {
-          fontFiles.push(p);
-        } else if (stat.isDirectory()) {
-          for (const entry of fs.readdirSync(p)) {
-            addFontFile(path.join(p, entry));
-          }
-        }
-      } catch (e) {
-        // ignore missing paths or permission issues
-      }
-    };
-
-    const preferredPatterns = [
-      /nanum/i,
-      /notosanskr/i,
-      /notosanscjk/i,
-      /malgun/i,
-      /batang/i,
-      /unbatang/i,
-    ];
-
-    for (const candidate of candidates) {
-      addFontFile(candidate);
-    }
-
-    for (const pattern of preferredPatterns) {
-      const match = fontFiles.find((file) => pattern.test(path.basename(file)));
-      if (match) return match;
-    }
-
-    // Do not fall back to an arbitrary font. If a CJK-capable font is not found,
-    // return null so the caller can warn and avoid silently using a font that
-    // will garble Korean text.
-    return null;
-  };
-
-  const fontPath = tryFonts();
-  if (fontPath) {
-    try {
-      // register font under a stable name and use it
-      try {
-        doc.registerFont('BaseCJK', fontPath);
-        doc.font('BaseCJK');
-      } catch (regErr) {
-        // fallback to direct path if registerFont fails
-        doc.font(fontPath);
-      }
-      console.log('Using PDF font:', fontPath);
-    } catch (e) {
-      console.warn('Failed to load font for PDF:', e.message || e);
-    }
-  } else {
-    console.warn('No CJK font found for PDF generation; Korean text may be garbled. Set PDF_FONT_PATH to a TTF/OTF file to fix.');
-  }
-
-  doc.pipe(res);
-
-  doc.fontSize(18).text(`${reportData.student.name} 학생 ${reportLabel} 보고서`, { underline: true });
-  doc.moveDown();
-  doc.fontSize(12).text(`생년월일: ${new Date(reportData.student.birthDate).toLocaleDateString('ko-KR')}`);
-  doc.text(`성별: ${reportData.student.gender === 'male' ? '남성' : '여성'}`);
-  doc.text(`작성일: ${new Date().toLocaleString('ko-KR')}`);
-  doc.moveDown();
-
-  if (reportLabel === '성적 분석') {
-    const summary = getGradeSummary(reportData.grades);
-    doc.fontSize(14).text('성적 요약');
-    doc.moveDown(0.5);
-    doc.fontSize(12).text(`전체 과목 수: ${reportData.grades.length}`);
-    doc.text(`평균 점수: ${summary.overallAverage}`);
-    doc.moveDown(0.5);
-    if (summary.subjectAverages.length) {
-      summary.subjectAverages.forEach((item) => {
-        doc.text(`- ${item.subject}: ${item.average}`);
-      });
-    } else {
-      doc.text('등록된 성적이 없습니다.');
-    }
-    doc.moveDown();
-    doc.fontSize(14).text('상세 성적 목록');
-    doc.moveDown(0.5);
-    reportData.grades.forEach((grade) => {
-      doc.text(`${grade.year} Term ${grade.term} | ${grade.subject} | 점수: ${grade.score}`);
-    });
-  } else if (reportLabel === '상담 내역') {
-    doc.fontSize(14).text('상담 내역');
-    doc.moveDown(0.5);
-    if (!reportData.counselings.length) {
-      doc.text('등록된 상담 내역이 없습니다.');
-    }
-    reportData.counselings.forEach((counseling) => {
-      doc.text(`- ${formatKoreanDateTime(counseling.dateTime)} | 상태: ${counseling.status} | 교사: ${counseling.teacherName}`);
-      if (counseling.studentNote) doc.text(`  학생 메모: ${counseling.studentNote}`);
-      if (counseling.teacherNotes) doc.text(`  교사 메모: ${counseling.teacherNotes}`);
-      if (counseling.rejectionReason) doc.text(`  거절 사유: ${counseling.rejectionReason}`);
-      doc.moveDown(0.5);
-    });
-  } else if (reportLabel === '피드백 요약') {
-    doc.fontSize(14).text('피드백 요약');
-    doc.moveDown(0.5);
-    if (!reportData.feedbacks.length) {
-      doc.text('등록된 피드백이 없습니다.');
-    }
-    reportData.feedbacks.forEach((feedback, index) => {
-      doc.text(`${index + 1}. 작성일: ${formatKoreanDateTime(feedback.createdAt)} | 교사: ${feedback.teacherName}`);
-      if (feedback.academicPerformance) doc.text(`  학업 성과: ${feedback.academicPerformance}`);
-      if (feedback.attendance) doc.text(`  출결: ${feedback.attendance}`);
-      if (feedback.behavior) doc.text(`  행동: ${feedback.behavior}`);
-      if (feedback.attitude) doc.text(`  태도: ${feedback.attitude}`);
-      if (feedback.additionalComments) doc.text(`  추가 의견: ${feedback.additionalComments}`);
-      doc.text(`  공유 여부: ${feedback.shareWithTeachers ? '공유' : '비공유'}`);
-      doc.moveDown(0.5);
-    });
-  }
-
-  doc.end();
+  return { student, grades, counselings, feedbacks, termAverages };
 };
 
 const generateExcelStudentReport = async (res, reportData, reportLabel, filename) => {
@@ -414,55 +293,61 @@ const generateExcelStudentReport = async (res, reportData, reportLabel, filename
   sheet.addRow([]);
 
   if (reportLabel === '성적 분석') {
-    sheet.columns = [
-      { header: '과목', key: 'subject', width: 18 },
-      { header: '학기', key: 'term', width: 14 },
-      { header: '점수', key: 'score', width: 10 }
-    ];
+    const summary = getGradeSummary(reportData.grades);
+    const termAverages = reportData.termAverages || calculateTermAverages(reportData.grades);
+    const subjectRanks = await calculateSubjectRanks(reportData.grades);
+
+    sheet.addRow([`전체 평균: ${summary.overallAverage}`]);
+    sheet.addRow([]);
+    sheet.addRow(['학기별 전과목 평균']);
+    sheet.addRow(['학기', '평균']);
+    termAverages.forEach((item) => {
+      sheet.addRow([`${item.year} Term ${item.term}`, item.average]);
+    });
+    sheet.addRow([]);
+    sheet.addRow(['과목별 평균']);
+    sheet.addRow(['과목', '평균']);
+    summary.subjectAverages.forEach((item) => {
+      sheet.addRow([item.subject, item.average]);
+    });
+    sheet.addRow([]);
+    sheet.addRow(['상세 성적 목록']);
+    sheet.addRow(['과목', '학기', '점수', '과목별 등수']);
     reportData.grades.forEach((grade) => {
-      sheet.addRow({ subject: grade.subject, term: `${grade.year} Term ${grade.term}`, score: grade.score });
+      sheet.addRow([
+        grade.subject,
+        `${grade.year} Term ${grade.term}`,
+        grade.score,
+        subjectRanks[grade._id.toString()] || '-'
+      ]);
     });
   } else if (reportLabel === '상담 내역') {
-    sheet.columns = [
-      { header: '상담 일시', key: 'dateTime', width: 24 },
-      { header: '상태', key: 'status', width: 12 },
-      { header: '교사', key: 'teacher', width: 16 },
-      { header: '학생 메모', key: 'studentNote', width: 30 },
-      { header: '교사 메모', key: 'teacherNotes', width: 30 },
-      { header: '거절 사유', key: 'rejectionReason', width: 30 }
-    ];
+    sheet.addRow(['상담 내역']);
+    sheet.addRow(['상담 일시', '상태', '교사', '학생 메모', '교사 메모', '거절 사유']);
     reportData.counselings.forEach((counseling) => {
-      sheet.addRow({
-        dateTime: formatKoreanDateTime(counseling.dateTime),
-        status: counseling.status,
-        teacher: counseling.teacherName,
-        studentNote: counseling.studentNote || '',
-        teacherNotes: counseling.teacherNotes || '',
-        rejectionReason: counseling.rejectionReason || ''
-      });
+      sheet.addRow([
+        formatKoreanDateTime(counseling.dateTime),
+        counseling.status,
+        counseling.teacherName,
+        counseling.studentNote || '',
+        counseling.teacherNotes || '',
+        counseling.rejectionReason || ''
+      ]);
     });
   } else if (reportLabel === '피드백 요약') {
-    sheet.columns = [
-      { header: '작성일', key: 'createdAt', width: 24 },
-      { header: '교사', key: 'teacherName', width: 16 },
-      { header: '학업 성과', key: 'academicPerformance', width: 24 },
-      { header: '출결', key: 'attendance', width: 20 },
-      { header: '행동', key: 'behavior', width: 20 },
-      { header: '태도', key: 'attitude', width: 20 },
-      { header: '추가 의견', key: 'additionalComments', width: 30 },
-      { header: '공유 여부', key: 'shareWithTeachers', width: 14 }
-    ];
+    sheet.addRow(['피드백 요약']);
+    sheet.addRow(['작성일', '교사', '학업 성과', '출결', '행동', '태도', '추가 의견', '공유 여부']);
     reportData.feedbacks.forEach((feedback) => {
-      sheet.addRow({
-        createdAt: formatKoreanDateTime(feedback.createdAt),
-        teacherName: feedback.teacherName,
-        academicPerformance: feedback.academicPerformance || '',
-        attendance: feedback.attendance || '',
-        behavior: feedback.behavior || '',
-        attitude: feedback.attitude || '',
-        additionalComments: feedback.additionalComments || '',
-        shareWithTeachers: feedback.shareWithTeachers ? '공유' : '비공유'
-      });
+      sheet.addRow([
+        formatKoreanDateTime(feedback.createdAt),
+        feedback.teacherName,
+        feedback.academicPerformance || '',
+        feedback.attendance || '',
+        feedback.behavior || '',
+        feedback.attitude || '',
+        feedback.additionalComments || '',
+        feedback.shareWithTeachers ? '공유' : '비공유'
+      ]);
     });
   }
 
@@ -1447,7 +1332,7 @@ stdRouter.delete("/feedbacks/:feedbackId", async (req, res) => {
 stdRouter.get("/:studentId/reports/:reportType", async (req, res) => {
   try {
     const { studentId, reportType } = req.params;
-    const format = String(req.query.format || 'pdf').toLowerCase();
+    const format = String(req.query.format || 'xlsx').toLowerCase();
 
     if (!studentId || !isValidObjectId(studentId)) {
       return res.status(400).json({ message: 'Valid student ID is required' });
@@ -1464,8 +1349,8 @@ stdRouter.get("/:studentId/reports/:reportType", async (req, res) => {
       return res.status(400).json({ message: 'Invalid report type' });
     }
 
-    if (!['pdf', 'xlsx'].includes(format)) {
-      return res.status(400).json({ message: 'Invalid format; must be pdf or xlsx' });
+    if (format !== 'xlsx') {
+      return res.status(400).json({ message: 'Invalid format; must be xlsx' });
     }
 
     const reportData = await buildStudentReportData(convertToObjectId(studentId));
@@ -1474,10 +1359,6 @@ stdRouter.get("/:studentId/reports/:reportType", async (req, res) => {
     }
 
     const filename = `${reportData.student.name}-${reportLabel}.${format}`.replace(/\s+/g, '_');
-
-    if (format === 'pdf') {
-      return generatePdfStudentReport(res, reportData, reportLabel, filename);
-    }
 
     return await generateExcelStudentReport(res, reportData, reportLabel, filename);
   } catch (err) {

@@ -1,5 +1,6 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
+const ExcelJS = require('exceljs');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let app;
@@ -19,7 +20,7 @@ afterAll(async () => {
 });
 
 describe('Report generation endpoints', () => {
-  it('generates PDF and XLSX for each report type', async () => {
+  it('generates XLSX for each report type', async () => {
     const Student = require('../models/student');
     const Grade = require('../models/grade');
     const Counseling = require('../models/counseling');
@@ -34,11 +35,32 @@ describe('Report generation endpoints', () => {
     const types = ['grade-analysis', 'counseling-history', 'feedback-summary'];
 
     for (const t of types) {
-      const pdfRes = await request(app).get(`/students/${student._id}/reports/${t}?format=pdf`).expect(200);
-      expect(pdfRes.headers['content-type']).toMatch(/application\/pdf/);
-
-      const xlsxRes = await request(app).get(`/students/${student._id}/reports/${t}?format=xlsx`).expect(200);
+      const xlsxRes = await request(app)
+        .get(`/students/${student._id}/reports/${t}?format=xlsx`)
+        .buffer(true)
+        .parse((res, callback) => {
+          res.setEncoding('binary');
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => callback(null, Buffer.from(data, 'binary')));
+        })
+        .expect(200);
       expect(xlsxRes.headers['content-type']).toMatch(/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxRes.body);
+      const sheet = workbook.getWorksheet('Report');
+      expect(sheet).toBeDefined();
+      const titleFound = sheet.getRows(1, sheet.rowCount).some((row) =>
+        Array.isArray(row.values) && row.values.some((value) => typeof value === 'string' && value.includes('ReportTester'))
+      );
+      expect(titleFound).toBe(true);
+      if (t === 'grade-analysis') {
+        const rankHeader = sheet.getRows(1, sheet.rowCount).some((row) =>
+          Array.isArray(row.values) && row.values.includes('과목별 등수')
+        );
+        expect(rankHeader).toBe(true);
+      }
     }
   }, 20000);
 });

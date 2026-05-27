@@ -2396,32 +2396,20 @@ function App() {
     return `${rank}/${scores.length}`
   }
 
-  // 보고서 보기(새 탭으로 PDF 열기)
-  const viewReport = (reportType) => {
-    if (!studentData || !studentData.studentId) {
-      alert('학생 정보가 없습니다.')
-      return
-    }
-    const url = `${API_URL}/students/${studentData.studentId}/reports/${reportType}?format=pdf`
-    window.open(url, '_blank')
-  }
-
-  // 보고서 다운로드 (pdf 또는 xlsx)
-  const downloadReport = async (reportType, format = 'xlsx') => {
+  const downloadReport = async (reportType) => {
     if (!studentData || !studentData.studentId) {
       alert('학생 정보가 없습니다.')
       return
     }
     try {
-      const res = await fetch(`${API_URL}/students/${studentData.studentId}/reports/${reportType}?format=${format}`)
+      const res = await fetch(`${API_URL}/students/${studentData.studentId}/reports/${reportType}?format=xlsx`)
       if (!res.ok) throw new Error('서버에서 파일을 가져오지 못했습니다.')
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const ext = format === 'pdf' ? 'pdf' : 'xlsx'
       const namePart = (studentData.username || studentData.studentName || 'student').replace(/\s+/g, '_')
-      a.download = `${namePart}-${reportType}.${ext}`
+      a.download = `${namePart}-${reportType}.xlsx`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -7450,18 +7438,15 @@ function App() {
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontSize: '13px', marginBottom: '6px' }}>성적 분석</div>
-                  <button onClick={() => viewReport('grade-analysis')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
-                  <button onClick={() => downloadReport('grade-analysis', 'xlsx')}>다운로드 (XLSX)</button>
+                  <button onClick={() => downloadReport('grade-analysis')}>다운로드 (XLSX)</button>
                 </div>
                 <div>
                   <div style={{ fontSize: '13px', marginBottom: '6px' }}>상담 내역</div>
-                  <button onClick={() => viewReport('counseling-history')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
-                  <button onClick={() => downloadReport('counseling-history', 'xlsx')}>다운로드 (XLSX)</button>
+                  <button onClick={() => downloadReport('counseling-history')}>다운로드 (XLSX)</button>
                 </div>
                 <div>
                   <div style={{ fontSize: '13px', marginBottom: '6px' }}>피드백 요약</div>
-                  <button onClick={() => viewReport('feedback-summary')} style={{ marginRight: '6px' }}>보기 (PDF)</button>
-                  <button onClick={() => downloadReport('feedback-summary', 'xlsx')}>다운로드 (XLSX)</button>
+                  <button onClick={() => downloadReport('feedback-summary')}>다운로드 (XLSX)</button>
                 </div>
               </div>
             </div>
