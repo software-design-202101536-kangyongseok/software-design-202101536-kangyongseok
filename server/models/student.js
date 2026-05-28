@@ -20,6 +20,20 @@ const studentSchema = new mongoose.Schema({
     required: true,
   },
   bio: String,
+  // Optional Kakao ID for the student (to link Kakao account to student)
+  kakaoId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  // Parents info: used to verify parent logins
+  parents: [
+    {
+      name: String,
+      kakaoId: { type: String },
+      email: { type: String }
+    }
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

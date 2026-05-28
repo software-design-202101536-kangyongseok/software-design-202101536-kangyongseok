@@ -110,13 +110,65 @@ function App() {
 
 
 
-    subject: '',
+    subject: [],
 
 
 
-    score: '',
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 Kakao ID (선택)</label>
+              <input
+                type="text"
+                name="kakaoId"
+                placeholder="학생의 카카오 ID 를 입력하세요"
+                value={formData.kakaoId}
+                onChange={handleFormChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ borderTop: '1px solid #eee', paddingTop: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학부모 정보 (선택)</label>
+              <input
+                type="text"
+                name="parentName"
+                placeholder="학부모 이름"
+                value={formData.parentName}
+                onChange={handleFormChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '8px' }}
+              />
+              <input
+                type="text"
+                name="parentKakaoId"
+                placeholder="학부모 Kakao ID"
+                value={formData.parentKakaoId}
+                onChange={handleFormChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '8px' }}
+              />
+              <input
+                type="email"
+                name="parentEmail"
+                placeholder="학부모 이메일"
+                value={formData.parentEmail}
+                onChange={handleFormChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+    bio: '',
 
 
+    kakaoId: '',
+
+
+    parentName: '',
+
+
+    parentKakaoId: '',
+
+
+    parentEmail: ''
+
+
+  })
 
     year: new Date().getFullYear(),
 
@@ -3615,43 +3667,37 @@ function App() {
 
 
 
-      const response = await fetch(`${API_URL}/students/attendances`, {
 
+      const payload = {
+        name: formData.name.trim(),
+        birthDate: formData.birthDate,
+        gender: formData.gender,
+        subject: formData.subject,
+        bio: formData.bio.trim()
+      }
 
+      if (formData.kakaoId && formData.kakaoId.trim() !== '') {
+        payload.kakaoId = formData.kakaoId.trim()
+      }
 
-        method: 'POST',
-
-
-
-        headers: {
-
-
-
-          'Content-Type': 'application/json',
-
-
-
-        },
-
-
-
-        body: JSON.stringify({
-
-
-
-          studentId: studentData.studentId,
-
-
-
-          date: attendanceData.date,
-
-
-
-          status: attendanceData.status
-
-
-
+      const parents = []
+      if (formData.parentName && formData.parentName.trim() !== '') {
+        parents.push({
+          name: formData.parentName.trim(),
+          kakaoId: formData.parentKakaoId ? formData.parentKakaoId.trim() : undefined,
+          email: formData.parentEmail ? formData.parentEmail.trim() : undefined
         })
+      }
+
+      if (parents.length > 0) payload.parents = parents
+
+      const response = await fetch(`${API_URL}/students`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
 
 
 

@@ -488,7 +488,7 @@ stdRouter.get("/all", async (req, res) => {
 
 stdRouter.post("/", async (req, res) => {
   try {
-    const { name, birthDate, gender, subject, bio } = req.body;
+    const { name, birthDate, gender, subject, bio, kakaoId, parents } = req.body;
     
     // 입력 검증
     const validation = validateStudentData({ name, birthDate, gender, subject, bio });
@@ -507,13 +507,29 @@ stdRouter.post("/", async (req, res) => {
       });
     }
     
-    const student = new Student({
+    const studentData = {
       name: name.toString().trim(),
       birthDate: new Date(birthDate),
       gender: gender,
       subject: Array.isArray(subject) ? subject : [subject],
       bio: bio.toString().trim(),
-    });
+    };
+
+    // optional kakaoId for student
+    if (kakaoId && typeof kakaoId === 'string' && kakaoId.trim()) {
+      studentData.kakaoId = kakaoId.trim();
+    }
+
+    // optional parents array
+    if (Array.isArray(parents) && parents.length > 0) {
+      studentData.parents = parents.map(p => ({
+        name: p.name || '',
+        kakaoId: p.kakaoId || '',
+        email: p.email || ''
+      }));
+    }
+
+    const student = new Student(studentData);
     
     const newStudent = await student.save();
     res.status(201).json(newStudent);
@@ -1054,13 +1070,14 @@ stdRouter.post("/auth/kakao", async (req, res) => {
     }
 
     let validatedStudentId = null;
+    let linkedStudent = null;
     if (userTypeValidation.value === 'student' || userTypeValidation.value === 'parent') {
       if (!studentId || !isValidObjectId(studentId)) {
         return res.status(400).json({ message: 'Student ID is required for student and parent users' });
       }
       validatedStudentId = convertToObjectId(studentId);
-      const student = await Student.findById(validatedStudentId);
-      if (!student) {
+      linkedStudent = await Student.findById(validatedStudentId);
+      if (!linkedStudent) {
         return res.status(404).json({ message: 'Student not found' });
       }
     }
@@ -1073,6 +1090,22 @@ stdRouter.post("/auth/kakao", async (req, res) => {
     const profileImageValidation = profileImage ? validateString(profileImage, 1, 1000) : { valid: true, value: '' };
     if (!profileImageValidation.valid) {
       return res.status(400).json({ message: `Profile image: ${profileImageValidation.error}` });
+    }
+
+    // Verify mapping rules before creating/updating user
+    if (userTypeValidation.value === 'student') {
+      // Student login only allowed if student's kakaoId matches
+      if (!linkedStudent.kakaoId || String(linkedStudent.kakaoId) !== String(kakaoIdValidation.value)) {
+        return res.status(403).json({ message: 'Student Kakao account not linked or does not match the provided Kakao ID' });
+      }
+    }
+
+    if (userTypeValidation.value === 'parent') {
+      // Parent login only allowed if student's parents include this kakaoId
+      const parentMatch = Array.isArray(linkedStudent.parents) && linkedStudent.parents.some(p => p.kakaoId && String(p.kakaoId) === String(kakaoIdValidation.value));
+      if (!parentMatch) {
+        return res.status(403).json({ message: 'Provided Kakao account is not registered as a parent for this student' });
+      }
     }
 
     let user = await User.findOne({ kakaoId: kakaoIdValidation.value });
