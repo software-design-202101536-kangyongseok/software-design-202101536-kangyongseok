@@ -1104,6 +1104,19 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       profileImage: user.profileImage,
     };
 
+    // If user is student or parent and has linked studentId, return studentName as username for compatibility
+    if ((user.userType === 'student' || user.userType === 'parent') && user.studentId) {
+      try {
+        const linkedStudent = await Student.findById(user.studentId);
+        if (linkedStudent) {
+          userData.username = linkedStudent.name;
+          userData.studentName = linkedStudent.name;
+        }
+      } catch (e) {
+        console.error('Error fetching linked student for kakao auth response:', e);
+      }
+    }
+
     res.status(200).json({ message: 'Kakao login successful', user: userData });
   } catch (err) {
     console.error('Kakao login error:', err);
