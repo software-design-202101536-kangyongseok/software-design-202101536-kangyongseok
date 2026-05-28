@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Login.css'
 const API_URL = import.meta.env.VITE_API_URL || ''
+const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY || ''
 
 function Login({ onLogin }) {
   const [userType, setUserType] = useState('teacher')
@@ -30,61 +31,101 @@ function Login({ onLogin }) {
     fetchStudents()
   }, [])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
-    // 각 사용자 유형별로 mock 데이터 생성
-    let mockUser
-    switch (userType) {
-      case 'teacher':
-        mockUser = {
-          username: 'teacher1',
-          userType: 'teacher'
+  useEffect(() => {
+    if (!window.Kakao) {
+      const script = document.createElement('script')
+      script.src = 'https://developers.kakao.com/sdk/js/kakao.js'
+      script.async = true
+      script.onload = () => {
+        if (window.Kakao && !window.Kakao.isInitialized() && KAKAO_JS_KEY) {
+          window.Kakao.init(KAKAO_JS_KEY)
         }
-        break
-      case 'student': {
-        if (!selectedStudent) {
-          setError('학생을 선택해주세요.')
-          return
-        }
-        // 선택된 학생 찾기
-        const student = students.find(s => s.name === selectedStudent)
-        if (!student) {
-          setError('선택된 학생을 찾을 수 없습니다.')
-          return
-        }
-        mockUser = {
-          username: student.name,
-          userType: 'student',
-          studentId: student._id
-        }
-        break
       }
-      case 'parent': {
-        if (!selectedStudent) {
-          setError('학생을 선택해주세요.')
-          return
-        }
-        const studentForParent = students.find(s => s.name === selectedStudent)
-        if (!studentForParent) {
-          setError('선택된 학생을 찾을 수 없습니다.')
-          return
-        }
-        mockUser = {
-          username: 'parent1',
-          userType: 'parent',
-          studentId: studentForParent._id,
-          studentName: studentForParent.name
-        }
-        break
-      }
-      default:
-        setError('잘못된 사용자 유형입니다.')
-        return
+      document.body.appendChild(script)
+    } else if (!window.Kakao.isInitialized() && KAKAO_JS_KEY) {
+      window.Kakao.init(KAKAO_JS_KEY)
+    }
+  }, [])
+
+  const handleKakaoLogin = async (e) => {
+    if (e && e.preventDefault) {
+      e.preventDefault()
     }
 
-    // 바로 로그인 처리
-    onLogin(mockUser)
+    setError('')
+
+    if (!KAKAO_JS_KEY) {
+      setError('카카오 JS 키가 설정되어 있지 않습니다.')
+      return
+    }
+
+    if (!window.Kakao) {
+      setError('카카오 SDK 로딩에 실패했습니다. 페이지를 새로고침 해주세요.')
+      return
+    }
+
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY)
+    }
+
+    window.Kakao.Auth.login({
+      success: async (authObj) => {
+        try {
+          const token = authObj.access_token
+          const profileResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          })
+          const profileData = await profileResponse.json()
+          const kakaoId = String(profileData.id)
+          const kakaoAccount = profileData.kakao_account || {}
+          const nickname = profileData.properties?.nickname || kakaoAccount.profile?.nickname || '카카오 사용자'
+          const email = kakaoAccount.email || ''
+          const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
+
+          if ((userType === 'student' || userType === 'parent') && !selectedStudent) {
+            setError('학생을 선택해주세요.')
+            return
+          }
+
+          const payload = {
+            kakaoId,
+            username: nickname,
+            email,
+            profileImage,
+            userType,
+            studentId: (userType === 'student' || userType === 'parent') ? students.find(s => s.name === selectedStudent)?._id : undefined
+          }
+
+          const response = await fetch(`${API_URL}/students/auth/kakao`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.message || 'Kakao login failed')
+          }
+
+          const data = await response.json()
+          onLogin(data.user)
+        } catch (loginErr) {
+          console.error('Kakao login error:', loginErr)
+          setError(loginErr.message || '카카오 로그인에 실패했습니다.')
+        }
+      },
+      fail: (err) => {
+        console.error('Kakao auth fail:', err)
+        setError('카카오 로그인 중 오류가 발생했습니다.')
+      }
+    })
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    await handleKakaoLogin()
   }
 
   return (

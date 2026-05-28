@@ -738,7 +738,7 @@ stdRouter.post("/attendances", async (req, res) => {
 stdRouter.post("/:studentId/counselings", async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { teacherName, date, time, studentNote } = req.body;
+    const { teacherName, date, time } = req.body;
 
     if (!studentId || !isValidObjectId(studentId)) {
       return res.status(400).json({ message: 'Valid Student ID is required' });
@@ -777,7 +777,6 @@ stdRouter.post("/:studentId/counselings", async (req, res) => {
       studentName: student.name,
       teacherName: teacherNameValidation.value,
       dateTime,
-      studentNote: studentNote ? String(studentNote).trim() : '',
       status: 'pending'
     });
 
@@ -898,6 +897,11 @@ stdRouter.put("/counselings/:counselingId/notes", async (req, res) => {
     const counseling = await Counseling.findById(counselingId);
     if (!counseling) {
       return res.status(404).json({ message: 'Counseling request not found' });
+    }
+
+    // Only allow updating notes if counseling is accepted
+    if (counseling.status !== 'accepted') {
+      return res.status(400).json({ message: 'Counseling notes can only be updated for accepted counseling requests' });
     }
 
     counseling.teacherNotes = notesValidation.value;
@@ -1026,6 +1030,83 @@ stdRouter.post("/login", async (req, res) => {
     res.status(200).json({ message: 'Login successful', user: userData });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+stdRouter.post("/auth/kakao", async (req, res) => {
+  try {
+    const { kakaoId, username, email, profileImage, userType, studentId } = req.body;
+
+    const kakaoIdValidation = validateString(kakaoId || '', 1, 200);
+    if (!kakaoIdValidation.valid) {
+      return res.status(400).json({ message: `Kakao ID: ${kakaoIdValidation.error}` });
+    }
+
+    const usernameValidation = validateString(username || '', 1, 100);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ message: `Username: ${usernameValidation.error}` });
+    }
+
+    const userTypeValidation = validateEnum(userType, ['student', 'teacher', 'parent']);
+    if (!userTypeValidation.valid) {
+      return res.status(400).json({ message: userTypeValidation.error });
+    }
+
+    let validatedStudentId = null;
+    if (userTypeValidation.value === 'student' || userTypeValidation.value === 'parent') {
+      if (!studentId || !isValidObjectId(studentId)) {
+        return res.status(400).json({ message: 'Student ID is required for student and parent users' });
+      }
+      validatedStudentId = convertToObjectId(studentId);
+      const student = await Student.findById(validatedStudentId);
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+    }
+
+    const emailValidation = email ? validateString(email, 5, 200) : { valid: true, value: '' };
+    if (!emailValidation.valid) {
+      return res.status(400).json({ message: `Email: ${emailValidation.error}` });
+    }
+
+    const profileImageValidation = profileImage ? validateString(profileImage, 1, 1000) : { valid: true, value: '' };
+    if (!profileImageValidation.valid) {
+      return res.status(400).json({ message: `Profile image: ${profileImageValidation.error}` });
+    }
+
+    let user = await User.findOne({ kakaoId: kakaoIdValidation.value });
+    if (!user) {
+      user = await User.create({
+        kakaoId: kakaoIdValidation.value,
+        username: usernameValidation.value,
+        email: emailValidation.value || undefined,
+        profileImage: profileImageValidation.value || undefined,
+        userType: userTypeValidation.value,
+        studentId: validatedStudentId,
+        lastLoginAt: new Date(),
+      });
+    } else {
+      user.username = usernameValidation.value;
+      user.email = emailValidation.value || user.email;
+      user.profileImage = profileImageValidation.value || user.profileImage;
+      user.userType = userTypeValidation.value;
+      user.studentId = validatedStudentId || user.studentId;
+      user.lastLoginAt = new Date();
+      await user.save();
+    }
+
+    const userData = {
+      username: user.username,
+      userType: user.userType,
+      studentId: user.studentId,
+      email: user.email,
+      profileImage: user.profileImage,
+    };
+
+    res.status(200).json({ message: 'Kakao login successful', user: userData });
+  } catch (err) {
+    console.error('Kakao login error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

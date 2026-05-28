@@ -406,7 +406,7 @@ function App() {
 
 
 
-  const [counselingForm, setCounselingForm] = useState({ date: new Date().toISOString().split('T')[0], time: '15:00', note: '' })
+  const [counselingForm, setCounselingForm] = useState({ date: new Date().toISOString().split('T')[0], time: '15:00' })
 
 
 
@@ -1587,7 +1587,7 @@ function App() {
 
 
 
-    setCounselingForm({ date: new Date().toISOString().split('T')[0], time: '15:00', note: '' })
+    setCounselingForm({ date: new Date().toISOString().split('T')[0], time: '15:00' })
 
 
 
@@ -8721,11 +8721,23 @@ function App() {
 
 
 
-                    <textarea value={selectedCounseling.teacherNotes || ''} onChange={handleTeacherNotesChange} rows="5" style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }} placeholder="상담 내용을 입력하세요."></textarea>
+                    {selectedCounseling.status !== 'accepted' && (
 
 
 
-                    <button type="button" onClick={handleStudentNotesSave} disabled={counselingLoading} style={{ marginTop: '10px', padding: '10px 16px', backgroundColor: '#1976D2', color: 'white', border: 'none', borderRadius: '4px', cursor: counselingLoading ? 'not-allowed' : 'pointer' }}>
+                      <p style={{ color: '#F44336', marginBottom: '10px', fontSize: '14px' }}>상담을 승인한 후 상담 내용을 입력할 수 있습니다.</p>
+
+
+
+                    )}
+
+
+
+                    <textarea value={selectedCounseling.teacherNotes || ''} onChange={handleTeacherNotesChange} disabled={selectedCounseling.status !== 'accepted'} rows="5" style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: selectedCounseling.status !== 'accepted' ? '#f0f0f0' : 'white' }} placeholder="상담 내용을 입력하세요."></textarea>
+
+
+
+                    <button type="button" onClick={handleStudentNotesSave} disabled={counselingLoading || selectedCounseling.status !== 'accepted'} style={{ marginTop: '10px', padding: '10px 16px', backgroundColor: selectedCounseling.status === 'accepted' ? '#1976D2' : '#ccc', color: 'white', border: 'none', borderRadius: '4px', cursor: (counselingLoading || selectedCounseling.status !== 'accepted') ? 'not-allowed' : 'pointer' }}>
 
 
 
