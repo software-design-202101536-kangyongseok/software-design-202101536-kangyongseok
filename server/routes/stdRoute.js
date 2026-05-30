@@ -466,9 +466,16 @@ stdRouter.get("/by-id/:id", async (req, res) => {
 
 stdRouter.get("/all", async (req, res) => {
   try {
+    // If MongoDB isn't connected, return an empty list so the client
+    // (e.g. teacher UI) doesn't break with a 500 during development.
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('MongoDB not connected - returning empty students list');
+      return res.status(200).json([]);
+    }
+
     const students = await Student.find({}, 'name subject');
     const allGrades = await Grade.find({});
-    
+
     const studentsWithGrades = students.map(student => {
       const studentGrades = allGrades.filter(grade => grade.student.toString() === student._id.toString());
       return {
@@ -478,7 +485,7 @@ stdRouter.get("/all", async (req, res) => {
         grades: studentGrades
       };
     });
-    
+
     res.status(200).json(studentsWithGrades);
   } catch (err) {
     console.error('Error fetching all students:', err);
