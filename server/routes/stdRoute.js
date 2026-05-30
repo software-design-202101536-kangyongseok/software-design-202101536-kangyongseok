@@ -495,6 +495,10 @@ stdRouter.get("/all", async (req, res) => {
 
 stdRouter.post("/", async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      console.error('MongoDB not connected - cannot create student');
+      return res.status(503).json({ message: 'Database not connected' });
+    }
     const { name, birthDate, gender, subject, bio, kakaoId, parents } = req.body;
     
     // 입력 검증

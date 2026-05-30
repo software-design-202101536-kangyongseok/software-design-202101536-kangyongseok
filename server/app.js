@@ -16,10 +16,12 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// MongoDB 연결
-mongoose
-  .connect(mongoURI, {  })
-  .then(async () => {
+// MongoDB 연결: 즉시 실패하도록 버퍼링 비활성화 및 재시도 로직 추가
+mongoose.set('bufferCommands', false);
+
+const connectWithRetry = async (attempts = 5, delay = 2000) => {
+  try {
+    await mongoose.connect(mongoURI);
     console.log("MongoDB connected");
     // Initialize default subjects
     const Subject = require("./models/subject");
@@ -31,8 +33,18 @@ mongoose
         console.log(`Added default subject: ${subj}`);
       }
     }
-  })
-  .catch((err) => console.log("MongoDB connection error:", err));
+  } catch (err) {
+    console.log("MongoDB connection error:", err);
+    if (attempts > 0) {
+      console.log(`Retrying MongoDB connection in ${delay}ms... (${attempts - 1} attempts left)`);
+      setTimeout(() => connectWithRetry(attempts - 1, Math.min(delay * 2, 60000)), delay);
+    } else {
+      console.error('MongoDB connection failed after multiple attempts.');
+    }
+  }
+};
+
+if (mongoURI) connectWithRetry();
 
 // 라우트 설정 (정적 파일보다 먼저!)
 app.use("/students", stdRouter);
