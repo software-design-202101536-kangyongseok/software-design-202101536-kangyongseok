@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
+const os = require('os');
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const mongoURI = process.env.MONGODB_URL;
@@ -45,6 +46,39 @@ const connectWithRetry = async (attempts = 5, delay = 2000) => {
 };
 
 if (mongoURI) connectWithRetry();
+
+// Mask sensitive parts of Mongo URI for logging
+const maskMongoUri = (uri) => {
+  try {
+    if (!uri) return null;
+    // If contains credentials like user:pass@host
+    const atIndex = uri.indexOf('@');
+    if (atIndex === -1) return uri.replace(/(mongodb\+srv:\/\/)/i, '$1****@');
+    const left = uri.substring(0, atIndex);
+    const right = uri.substring(atIndex + 1);
+    const protocolSplit = left.split('//');
+    if (protocolSplit.length === 2) {
+      const creds = protocolSplit[1].split(':');
+      const user = creds[0] || 'user';
+      return `${protocolSplit[0]}//${user}:****@${right}`;
+    }
+    return `****@${right}`;
+  } catch (e) {
+    return 'masked';
+  }
+};
+
+console.log('MONGODB_URL set in env?:', !!mongoURI);
+console.log('Using MONGODB_URL:', maskMongoUri(mongoURI));
+
+// health endpoint for quick checks
+app.get('/health', (req, res) => {
+  res.json({
+    hostname: os.hostname(),
+    envMongoDefined: !!process.env.MONGODB_URL,
+    mongoReadyState: mongoose.connection.readyState
+  });
+});
 
 // 라우트 설정 (정적 파일보다 먼저!)
 app.use("/students", stdRouter);

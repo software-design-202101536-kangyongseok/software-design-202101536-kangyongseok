@@ -172,7 +172,7 @@ function App() {
   const handleAddSubject = async () => {
     if (!newSubject.trim()) return
     try {
-      const response = await fetch('http://localhost:3000/students/subjects', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/subjects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ function App() {
   const handleDeleteSubject = async (subjectName) => {
     if (!confirm(`"${subjectName}" 과목을 삭제하시겠습니까?`)) return
     try {
-      const response = await fetch(`http://localhost:3000/students/subjects/${encodeURIComponent(subjectName)}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/subjects/${encodeURIComponent(subjectName)}`, {
         method: 'DELETE'
       })
       if (!response.ok) {
@@ -218,7 +218,7 @@ function App() {
     setStudentData(null)
     
     try {
-      const response = await fetch(`http://localhost:3000/students?name=${encodeURIComponent(searchName)}&subject=${encodeURIComponent(subjectFilter)}`)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students?name=${encodeURIComponent(searchName)}&subject=${encodeURIComponent(subjectFilter)}`)
       
       if (response.status === 404) {
         throw new Error(`Student "${searchName}" not found`)
@@ -250,7 +250,7 @@ function App() {
     setAllStudentsLoading(true)
     setAllStudentsError('')
     try {
-      const response = await fetch('http://localhost:3000/students/all')
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/all`)
       if (!response.ok) {
         throw new Error('Failed to fetch all students')
       }
@@ -269,7 +269,7 @@ function App() {
 
   const fetchSubjects = async () => {
     try {
-      const response = await fetch('http://localhost:3000/students/subjects')
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/subjects`)
       if (!response.ok) {
         throw new Error('Failed to fetch subjects')
       }
@@ -321,7 +321,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:3000/students/grades', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/grades`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -377,7 +377,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:3000/students/attendances', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/attendances`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -461,7 +461,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch(`http://localhost:3000/students/${studentData.username}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students/${studentData.username}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -519,7 +519,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:3000/students', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/students`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
