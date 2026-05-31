@@ -7,21 +7,7 @@ import './App.css'
 
 
 import Login from './Login'
-
-
-
-
-
-
-
 const API_URL = import.meta.env.VITE_API_URL || ''
-
-
-
-
-
-
-
 function App() {
 
 

@@ -17,7 +17,7 @@ function Login({ onLogin }) {
         setStudents(data)
         // 첫 번째 학생을 기본 선택
         if (data.length > 0) {
-          setSelectedStudent(data[0].name)
+          setSelectedStudent(data[0]._id || data[0].studentId || '')
         }
       }
     } catch (err) {
@@ -89,13 +89,19 @@ function Login({ onLogin }) {
             return
           }
 
+          const linkedStudent = students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
+          if ((userType === 'student' || userType === 'parent') && !linkedStudent) {
+            setError('선택한 학생이 등록된 학생 목록에 없습니다.')
+            return
+          }
+
           const payload = {
             kakaoId,
             username: nickname,
             email,
             profileImage,
             userType,
-            studentId: (userType === 'student' || userType === 'parent') ? students.find(s => s.name === selectedStudent)?._id : undefined
+            studentId: (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
           }
 
           const response = await fetch(`${API_URL}/students/auth/kakao`, {
@@ -150,7 +156,7 @@ function Login({ onLogin }) {
                 onChange={(e) => setSelectedStudent(e.target.value)}
               >
                 {students.map(student => (
-                  <option key={student.studentId || student.name} value={student.name}>
+                  <option key={student._id || student.studentId || student.name} value={student._id || student.studentId || student.name}>
                     {student.name}
                   </option>
                 ))}
