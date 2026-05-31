@@ -7,7 +7,21 @@ import './App.css'
 
 
 import Login from './Login'
+
+
+
+
+
+
+
 const API_URL = import.meta.env.VITE_API_URL || ''
+
+
+
+
+
+
+
 function App() {
 
 
@@ -2407,23 +2421,38 @@ function App() {
   }
 
   const getRadarChartData = (grades) => {
-    const latestBySubject = {}
+    const subjectScores = {}
 
     grades.forEach((grade) => {
       const subject = grade.subject || 'Unknown'
-      const termKey = Number(grade.year) * 10 + Number(grade.term)
-      if (!latestBySubject[subject] || termKey > latestBySubject[subject].termKey) {
-        latestBySubject[subject] = {
-          subject,
-          score: Number(grade.score) || 0,
-          termKey
-        }
-      }
+      subjectScores[subject] = Number(grade.score) || 0
     })
 
-    return Object.values(latestBySubject)
-      .sort((a, b) => a.subject.localeCompare(b.subject))
-      .map(({ subject, score }) => ({ subject, score }))
+    return Object.keys(subjectScores)
+      .sort((a, b) => a.localeCompare(b))
+      .map((subject) => ({ subject, score: subjectScores[subject] }))
+  }
+
+  const getGradesGroupedByTerm = (grades) => {
+    const groups = {}
+
+    grades.forEach((grade) => {
+      const year = Number(grade.year)
+      const term = Number(grade.term)
+      const subject = grade.subject
+      if (!year || !term || !subject) return
+
+      const key = `${year}-${term}`
+      if (!groups[key]) {
+        groups[key] = { year, term, grades: [] }
+      }
+      groups[key].grades.push(grade)
+    })
+
+    return Object.values(groups).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year
+      return a.term - b.term
+    })
   }
 
   const renderGradeRadarChart = (grades) => {
@@ -2521,6 +2550,24 @@ function App() {
           })}
           {labels}
         </svg>
+      </div>
+    )
+  }
+
+  const renderGradeRadarChartsByTerm = (grades) => {
+    const groups = getGradesGroupedByTerm(grades)
+    if (!groups.length) {
+      return <p style={{ color: '#666', marginTop: '8px' }}>성적이 없어 레이더 차트를 표시할 수 없습니다.</p>
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: '24px', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+        {groups.map((group) => (
+          <div key={`${group.year}-${group.term}`} style={{ padding: '16px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff' }}>
+            <h4 style={{ margin: '0 0 12px 0' }}>{group.year}년 Term {group.term}</h4>
+            {renderGradeRadarChart(group.grades)}
+          </div>
+        ))}
       </div>
     )
   }
@@ -7490,8 +7537,8 @@ function App() {
             <h3>성적 {user.userType === 'teacher' && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
             {studentData.grades.length > 0 && (
               <div style={{ marginTop: '15px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8fbff' }}>
-                <h4 style={{ margin: '0 0 10px 0' }}>전 과목 성적 레이더 차트</h4>
-                {renderGradeRadarChart(studentData.grades)}
+                <h4 style={{ margin: '0 0 10px 0' }}>학기별 성적 레이더 차트</h4>
+                {renderGradeRadarChartsByTerm(studentData.grades)}
               </div>
             )}
 
