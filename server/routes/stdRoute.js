@@ -1135,17 +1135,36 @@ stdRouter.post("/auth/kakao", async (req, res) => {
 
     // Verify mapping rules before creating/updating user
     if (userTypeValidation.value === 'student') {
-      // Student login only allowed if student's kakaoId matches
-      if (!linkedStudent.kakaoId || String(linkedStudent.kakaoId) !== String(kakaoIdValidation.value)) {
+      if (!linkedStudent.kakaoId) {
+        // First-time student login: link this Kakao account to the student record
+        linkedStudent.kakaoId = kakaoIdValidation.value;
+        await linkedStudent.save();
+      } else if (String(linkedStudent.kakaoId) !== String(kakaoIdValidation.value)) {
         return res.status(403).json({ message: 'Student Kakao account not linked or does not match the provided Kakao ID' });
       }
     }
 
     if (userTypeValidation.value === 'parent') {
-      // Parent login only allowed if student's parents include this kakaoId
-      const parentMatch = Array.isArray(linkedStudent.parents) && linkedStudent.parents.some(p => p.kakaoId && String(p.kakaoId) === String(kakaoIdValidation.value));
+      const parentEmail = emailValidation.value;
+      const parentMatch = Array.isArray(linkedStudent.parents) && linkedStudent.parents.find(p => {
+        if (p.kakaoId && String(p.kakaoId) === String(kakaoIdValidation.value)) {
+          return true;
+        }
+        if (parentEmail && p.email && String(p.email).toLowerCase() === String(parentEmail).toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
+
       if (!parentMatch) {
         return res.status(403).json({ message: 'Provided Kakao account is not registered as a parent for this student' });
+      }
+
+      if (!parentMatch.kakaoId && parentEmail && parentMatch.email && String(parentMatch.email).toLowerCase() === String(parentEmail).toLowerCase()) {
+        parentMatch.kakaoId = kakaoIdValidation.value;
+        await linkedStudent.save();
+      } else if (parentMatch.kakaoId && String(parentMatch.kakaoId) !== String(kakaoIdValidation.value)) {
+        return res.status(403).json({ message: 'Provided Kakao ID does not match the registered parent account' });
       }
     }
 
