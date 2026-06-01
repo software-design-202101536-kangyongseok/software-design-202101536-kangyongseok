@@ -186,6 +186,8 @@ const buildStudentResponse = async (student, subjectFilter) => {
     gender: student.gender,
     subjects: student.subject,
     bio: student.bio,
+    kakaoId: student.kakaoId || '',
+    parents: Array.isArray(student.parents) ? student.parents : [],
     grades: grades,
     attendances: attendances,
     studentId: student._id,
