@@ -554,15 +554,19 @@ stdRouter.post("/", async (req, res) => {
 
 stdRouter.put("/:name", async (req, res) => {
   try {
-    const { name, birthDate, gender, subject, bio } = req.body;
-    
-    // Validate name
+    const originalNameValidation = validateString(req.params.name, 2, 100);
+    if (!originalNameValidation.valid) {
+      return res.status(400).json({ message: `Original student name: ${originalNameValidation.error}` });
+    }
+
+    const { name, birthDate, gender, subject, bio, kakaoId, parents } = req.body;
+
+    // Validate requested update fields
     const nameValidation = validateString(name, 2, 100);
     if (!nameValidation.valid) {
       return res.status(400).json({ message: `Name: ${nameValidation.error}` });
     }
-    
-    // 입력 검증
+
     const validation = validateStudentData({ name, birthDate, gender, subject, bio });
     if (!validation.valid) {
       return res.status(400).json({ 
@@ -570,19 +574,43 @@ stdRouter.put("/:name", async (req, res) => {
         errors: validation.errors 
       });
     }
-    
+
+    let updateData = {
+      name: nameValidation.value,
+      birthDate: new Date(birthDate),
+      gender,
+      subject: Array.isArray(subject) ? subject : [subject],
+      bio: bio.toString().trim(),
+    };
+
+    if (kakaoId && typeof kakaoId === 'string' && kakaoId.trim()) {
+      updateData.kakaoId = kakaoId.trim();
+    } else if (kakaoId === '') {
+      updateData.kakaoId = undefined;
+    }
+
+    if (Array.isArray(parents)) {
+      updateData.parents = parents
+        .map(p => ({
+          name: (p.name || '').toString().trim(),
+          kakaoId: (p.kakaoId || '').toString().trim(),
+          email: (p.email || '').toString().trim()
+        }))
+        .filter(p => p.name || p.kakaoId || p.email);
+    }
+
     const student = await Student.findOneAndUpdate(
-      { name: nameValidation.value },
-      { birthDate: new Date(birthDate), gender: gender, subject: Array.isArray(subject) ? subject : [subject], bio: bio.toString().trim() },
+      { name: originalNameValidation.value },
+      updateData,
       { returnDocument: 'after', runValidators: true }
     );
-    
+
     if (!student) {
       return res.status(404).json({ 
-        message: `Student "${name.toString().trim()}" not found` 
+        message: `Student "${originalNameValidation.value}" not found` 
       });
     }
-    
+
     res.status(200).json(student);
   } catch (err) {
     console.error('Error updating student:', err);

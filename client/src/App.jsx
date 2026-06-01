@@ -21,7 +21,9 @@ function App() {
     birthDate: '',
     gender: '',
     subject: [],
-    bio: ''
+    bio: '',
+    kakaoId: '',
+    parents: [{ name: '', kakaoId: '', email: '' }]
   })
 
   // Grade form state
@@ -59,7 +61,9 @@ function App() {
     birthDate: '',
     gender: '',
     subject: [],
-    bio: ''
+    bio: '',
+    kakaoId: '',
+    parents: [{ name: '', kakaoId: '', email: '' }]
   })
   const [showEditModal, setShowEditModal] = useState(false)
 
@@ -538,6 +542,26 @@ function App() {
     return null
   }
 
+  const validateParentData = (parents) => {
+    if (!Array.isArray(parents)) return []
+    return parents
+      .map((parent, index) => {
+        const name = (parent.name || '').trim()
+        const kakaoId = (parent.kakaoId || '').trim()
+        if (!name && !kakaoId && !(parent.email || '').trim()) {
+          return null
+        }
+        if (!name) {
+          return `Parent #${index + 1}: name is required when Kakao info is provided`
+        }
+        if (!kakaoId) {
+          return `Parent #${index + 1}: Kakao ID is required when name is provided`
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
   const validateFormData = () => {
     if (!formData.name || !formData.name.trim()) {
       return 'Student name is required'
@@ -555,6 +579,10 @@ function App() {
     }
     if (!formData.bio || !formData.bio.trim()) {
       return 'Biography is required'
+    }
+    const parentErrors = validateParentData(formData.parents)
+    if (parentErrors.length > 0) {
+      return parentErrors[0]
     }
     return null
   }
@@ -999,6 +1027,34 @@ function App() {
     }
   }
 
+  const handleParentChange = (index, field, value, isEdit = false) => {
+    const setter = isEdit ? setEditData : setFormData
+    setter(prev => {
+      const parents = Array.isArray(prev.parents) ? [...prev.parents] : []
+      parents[index] = {
+        ...(parents[index] || { name: '', kakaoId: '', email: '' }),
+        [field]: value
+      }
+      return { ...prev, parents }
+    })
+  }
+
+  const addParentField = (isEdit = false) => {
+    const setter = isEdit ? setEditData : setFormData
+    setter(prev => ({
+      ...prev,
+      parents: [...(Array.isArray(prev.parents) ? prev.parents : []), { name: '', kakaoId: '', email: '' }]
+    }))
+  }
+
+  const removeParentField = (index, isEdit = false) => {
+    const setter = isEdit ? setEditData : setFormData
+    setter(prev => ({
+      ...prev,
+      parents: (Array.isArray(prev.parents) ? prev.parents : []).filter((_, idx) => idx !== index)
+    }))
+  }
+
   const handleGradeChange = (e) => {
     const { name, value } = e.target
     setGradeData(prev => ({
@@ -1141,17 +1197,17 @@ function App() {
       setError('Student name is required')
       return
     }
-    if (!editData.age) {
-      setError('Age is required')
+    if (!editData.birthDate) {
+      setError('Birth date is required')
       return
     }
-    const ageNum = Number.parseInt(editData.age)
-    if (Number.isNaN(ageNum)) {
-      setError('Age must be a number')
+    const birthDateError = validateBirthDate(editData.birthDate)
+    if (birthDateError) {
+      setError(birthDateError)
       return
     }
-    if (ageNum < 1 || ageNum > 120) {
-      setError('Age must be between 1 and 120')
+    if (!editData.gender || !['male', 'female'].includes(editData.gender)) {
+      setError('Gender is required and must be male or female')
       return
     }
     if (!editData.subject || editData.subject.length === 0) {
@@ -1163,6 +1219,14 @@ function App() {
       return
     }
 
+    const validParents = (Array.isArray(editData.parents) ? editData.parents : [])
+      .map(p => ({
+        name: (p.name || '').trim(),
+        kakaoId: (p.kakaoId || '').trim(),
+        email: (p.email || '').trim()
+      }))
+      .filter(p => p.name || p.kakaoId || p.email)
+
     setLoading(true)
     try {
       const response = await fetch(`${API_URL}/students/${studentData.username}`, {
@@ -1172,9 +1236,12 @@ function App() {
         },
         body: JSON.stringify({
           name: editData.name.trim(),
-          age: Number.parseInt(editData.age),
+          birthDate: editData.birthDate,
+          gender: editData.gender,
           subject: editData.subject,
-          bio: editData.bio.trim()
+          bio: editData.bio.trim(),
+          kakaoId: (editData.kakaoId || '').trim(),
+          parents: validParents
         })
       })
 
@@ -1186,7 +1253,7 @@ function App() {
       setSuccess(`Student "${editData.name}" updated successfully!`)
       
       // 학생 정보 새로고침
-      await fetchStudent(editData.username, false)
+      await fetchStudent(editData.name.trim(), false)
       setShowStudentModal(true) // 모달이 닫혀있을 경우 다시 열기
       setShowEditModal(false)
     } catch (err) {
@@ -1206,7 +1273,15 @@ function App() {
       birthDate: studentData.birthDate ? new Date(studentData.birthDate).toISOString().split('T')[0] : '',
       gender: studentData.gender || '',
       subject: Array.isArray(studentData.subjects) ? studentData.subjects : [studentData.subjects],
-      bio: studentData.bio
+      bio: studentData.bio,
+      kakaoId: studentData.kakaoId || '',
+      parents: Array.isArray(studentData.parents) && studentData.parents.length > 0
+        ? studentData.parents.map(p => ({
+            name: p.name || '',
+            kakaoId: p.kakaoId || '',
+            email: p.email || ''
+          }))
+        : [{ name: '', kakaoId: '', email: '' }]
     })
     setShowEditModal(true)
   }
@@ -1234,7 +1309,15 @@ function App() {
           birthDate: formData.birthDate,
           gender: formData.gender,
           subject: formData.subject,
-          bio: formData.bio.trim()
+          bio: formData.bio.trim(),
+          kakaoId: formData.kakaoId.trim(),
+          parents: (Array.isArray(formData.parents) ? formData.parents : [])
+            .map(p => ({
+              name: (p.name || '').trim(),
+              kakaoId: (p.kakaoId || '').trim(),
+              email: (p.email || '').trim()
+            }))
+            .filter(p => p.name || p.kakaoId || p.email)
         })
       })
 
@@ -1249,7 +1332,15 @@ function App() {
 
       const newStudent = await response.json()
       setSuccess(`Student "${newStudent.name}" registered successfully!`)
-      setFormData({ name: '', birthDate: '', gender: '', subject: '', bio: '' })
+      setFormData({
+        name: '',
+        birthDate: '',
+        gender: '',
+        subject: [],
+        bio: '',
+        kakaoId: '',
+        parents: [{ name: '', kakaoId: '', email: '' }]
+      })
       setError('')
     } catch (err) {
       if (err instanceof TypeError) {
@@ -1629,6 +1720,58 @@ function App() {
                   rows="4"
                 />
               </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 카카오 ID</label>
+                <input
+                  type="text"
+                  name="kakaoId"
+                  placeholder="학생 카카오 ID를 입력하세요"
+                  value={editData.kakaoId}
+                  onChange={handleEditChange}
+                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>부모 정보</label>
+                {editData.parents.map((parent, index) => (
+                  <div key={index} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <strong>부모 #{index + 1}</strong>
+                      {editData.parents.length > 1 && (
+                        <button type="button" onClick={() => removeParentField(index, true)} style={{ background: 'none', border: 'none', color: '#d32f2f', cursor: 'pointer' }}>
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <input
+                        type="text"
+                        placeholder="부모 이름"
+                        value={parent.name}
+                        onChange={(e) => handleParentChange(index, 'name', e.target.value, true)}
+                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="부모 카카오 ID"
+                        value={parent.kakaoId}
+                        onChange={(e) => handleParentChange(index, 'kakaoId', e.target.value, true)}
+                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
+                      />
+                      <input
+                        type="email"
+                        placeholder="부모 이메일 (선택)"
+                        value={parent.email}
+                        onChange={(e) => handleParentChange(index, 'email', e.target.value, true)}
+                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={() => addParentField(true)} style={{ padding: '8px 12px', backgroundColor: '#1976d2', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  부모 추가
+                </button>
+              </div>
               <button 
                 type="submit" 
                 disabled={loading}
@@ -1840,6 +1983,58 @@ function App() {
                 required
                 rows="4"
               />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 카카오 ID</label>
+              <input
+                type="text"
+                name="kakaoId"
+                placeholder="학생 카카오 ID를 입력하세요"
+                value={formData.kakaoId}
+                onChange={handleFormChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>부모 정보</label>
+              {formData.parents.map((parent, index) => (
+                <div key={index} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <strong>부모 #{index + 1}</strong>
+                    {formData.parents.length > 1 && (
+                      <button type="button" onClick={() => removeParentField(index)} style={{ background: 'none', border: 'none', color: '#d32f2f', cursor: 'pointer' }}>
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <input
+                      type="text"
+                      placeholder="부모 이름"
+                      value={parent.name}
+                      onChange={(e) => handleParentChange(index, 'name', e.target.value)}
+                      style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="부모 카카오 ID"
+                      value={parent.kakaoId}
+                      onChange={(e) => handleParentChange(index, 'kakaoId', e.target.value)}
+                      style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
+                    />
+                    <input
+                      type="email"
+                      placeholder="부모 이메일 (선택)"
+                      value={parent.email}
+                      onChange={(e) => handleParentChange(index, 'email', e.target.value)}
+                      style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => addParentField()} style={{ padding: '8px 12px', backgroundColor: '#1976d2', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                부모 추가
+              </button>
             </div>
             <button 
               type="submit" 
