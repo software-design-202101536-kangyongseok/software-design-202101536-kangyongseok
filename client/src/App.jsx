@@ -547,15 +547,16 @@ function App() {
     return parents
       .map((parent, index) => {
         const name = (parent.name || '').trim()
+        const email = (parent.email || '').trim()
         const kakaoId = (parent.kakaoId || '').trim()
-        if (!name && !kakaoId && !(parent.email || '').trim()) {
+        if (!name && !email && !kakaoId) {
           return null
         }
         if (!name) {
-          return `Parent #${index + 1}: name is required when Kakao info is provided`
+          return `Parent #${index + 1}: name is required when parent information is provided`
         }
-        if (!kakaoId) {
-          return `Parent #${index + 1}: Kakao ID is required when name is provided`
+        if (!email && !kakaoId) {
+          return `Parent #${index + 1}: either email or Kakao ID is required`
         }
         return null
       })
@@ -1245,20 +1246,24 @@ function App() {
 
     setLoading(true)
     try {
+      const updatePayload = {
+        name: editData.name.trim(),
+        birthDate: editData.birthDate,
+        gender: editData.gender,
+        subject: editData.subject,
+        bio: editData.bio.trim(),
+        parents: validParents
+      }
+      if ((editData.kakaoId || '').trim()) {
+        updatePayload.kakaoId = editData.kakaoId.trim()
+      }
+
       const response = await fetch(`${API_URL}/students/${studentData.username}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: editData.name.trim(),
-          birthDate: editData.birthDate,
-          gender: editData.gender,
-          subject: editData.subject,
-          bio: editData.bio.trim(),
-          kakaoId: (editData.kakaoId || '').trim(),
-          parents: validParents
-        })
+        body: JSON.stringify(updatePayload)
       })
 
       if (!response.ok) {
@@ -1326,7 +1331,6 @@ function App() {
           gender: formData.gender,
           subject: formData.subject,
           bio: formData.bio.trim(),
-          kakaoId: formData.kakaoId.trim(),
           parents: (Array.isArray(formData.parents) ? formData.parents : [])
             .map(p => ({
               name: (p.name || '').trim(),
@@ -1755,18 +1759,8 @@ function App() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 카카오 ID</label>
-                <input
-                  type="text"
-                  name="kakaoId"
-                  placeholder="학생 카카오 ID를 입력하세요"
-                  value={editData.kakaoId}
-                  onChange={handleEditChange}
-                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>부모 정보</label>
+                <p style={{ margin: '0 0 10px 0', color: '#666', fontSize: '13px' }}>카카오 연동은 학부모가 본인 카카오로 로그인했을 때 이메일 또는 카카오 계정으로 자동 연결됩니다.</p>
                 {editData.parents.map((parent, index) => (
                   <div key={index} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -1786,15 +1780,8 @@ function App() {
                         style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
                       />
                       <input
-                        type="text"
-                        placeholder="부모 카카오 ID"
-                        value={parent.kakaoId}
-                        onChange={(e) => handleParentChange(index, 'kakaoId', e.target.value, true)}
-                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
-                      />
-                      <input
                         type="email"
-                        placeholder="부모 이메일 (선택)"
+                        placeholder="부모 이메일"
                         value={parent.email}
                         onChange={(e) => handleParentChange(index, 'email', e.target.value, true)}
                         style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
@@ -2018,19 +2005,12 @@ function App() {
                 rows="4"
               />
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 카카오 ID</label>
-              <input
-                type="text"
-                name="kakaoId"
-                placeholder="학생 카카오 ID를 입력하세요"
-                value={formData.kakaoId}
-                onChange={handleFormChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
+            <div style={{ marginBottom: '10px' }}>
+              <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>학생 카카오 연동은 학생이 본인 카카오로 실제 로그인할 때 자동으로 연결됩니다.</p>
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>부모 정보</label>
+              <p style={{ margin: '0 0 10px 0', color: '#666', fontSize: '13px' }}>카카오 연동은 학부모가 본인 카카오로 로그인했을 때 이메일 또는 카카오 계정으로 자동 연결됩니다.</p>
               {formData.parents.map((parent, index) => (
                 <div key={index} style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', marginBottom: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -2050,15 +2030,8 @@ function App() {
                       style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
                     />
                     <input
-                      type="text"
-                      placeholder="부모 카카오 ID"
-                      value={parent.kakaoId}
-                      onChange={(e) => handleParentChange(index, 'kakaoId', e.target.value)}
-                      style={{ width: '100%', padding: '8px', boxSizing: 'border-box', marginBottom: '10px' }}
-                    />
-                    <input
                       type="email"
-                      placeholder="부모 이메일 (선택)"
+                      placeholder="부모 이메일"
                       value={parent.email}
                       onChange={(e) => handleParentChange(index, 'email', e.target.value)}
                       style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
