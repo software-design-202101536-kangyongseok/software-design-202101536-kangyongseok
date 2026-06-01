@@ -1375,6 +1375,24 @@ function App() {
     setIsLoggedIn(true)
   }
 
+  const handleLogout = () => {
+    // Reset local app state
+    resetSessionState()
+    setIsLoggedIn(false)
+    setUser(null)
+
+    // If Kakao SDK is present, explicitly log out to prevent automatic re-login
+    try {
+      if (window && window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized() && window.Kakao.Auth && typeof window.Kakao.Auth.logout === 'function') {
+        window.Kakao.Auth.logout(() => {
+          // logout callback (no-op)
+        })
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   if (!isLoggedIn) {
     return <Login onLogin={handleLogin} />
   }
@@ -1412,7 +1430,7 @@ function App() {
               )}
             </button>
           )}
-          <button onClick={() => { resetSessionState(); setIsLoggedIn(false); setUser(null); }} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>로그아웃</button>
+          <button onClick={handleLogout} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>로그아웃</button>
         </div>
       </div>
       <nav style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
