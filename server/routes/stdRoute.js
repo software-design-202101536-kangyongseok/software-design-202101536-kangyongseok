@@ -569,9 +569,13 @@ stdRouter.post("/applications", async (req, res) => {
       return res.status(400).json({ message: `Name: ${nameValidation.error}` });
     }
 
-    const birthDateValidation = validateDate(birthDate || '');
-    if (!birthDateValidation.valid) {
-      return res.status(400).json({ message: `Birth date: ${birthDateValidation.error}` });
+    let birthDateValidated = undefined;
+    if (birthDate) {
+      const birthDateValidation = validateDate(birthDate);
+      if (!birthDateValidation.valid) {
+        return res.status(400).json({ message: `Birth date: ${birthDateValidation.error}` });
+      }
+      birthDateValidated = birthDateValidation.value;
     }
 
     const genderValidation = gender ? validateEnum(gender, ['male', 'female']) : { valid: true, value: undefined };
@@ -602,7 +606,7 @@ stdRouter.post("/applications", async (req, res) => {
     const application = await StudentApplication.create({
       kakaoId: kakaoIdValidation.value,
       name: nameValidation.value,
-      birthDate: birthDateValidation.value,
+      birthDate: birthDateValidated,
       gender: genderValidation.value,
       email: emailValidation.value || undefined,
       profileImage: profileImage ? profileImage.toString().trim() : undefined,

@@ -115,8 +115,12 @@ function Login({ onLogin }) {
             birthDate: (() => {
               const birthday = kakaoAccount.birthday || ''
               const birthyear = kakaoAccount.birthyear || ''
-              if (birthyear && birthday && birthday.length >= 4) {
-                return `${birthyear}-${birthday.slice(0, 2)}-${birthday.slice(2)}`
+              if (birthyear && birthday && birthday.length === 4) {
+                const month = birthday.slice(0, 2)
+                const day = birthday.slice(2, 4)
+                if (/^(0[1-9]|1[0-2])$/.test(month) && /^(0[1-9]|[12][0-9]|3[01])$/.test(day)) {
+                  return `${birthyear}-${month}-${day}`
+                }
               }
               return ''
             })(),
