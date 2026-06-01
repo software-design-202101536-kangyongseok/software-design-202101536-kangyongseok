@@ -69,6 +69,9 @@ function Login({ onLogin }) {
     }
 
     window.Kakao.Auth.login({
+      // Do not persist tokens in the SDK (prevents automatic re-login/cache)
+      persistAccessToken: false,
+      persistRefreshToken: false,
       success: async (authObj) => {
         try {
           const token = authObj.access_token
@@ -117,6 +120,15 @@ function Login({ onLogin }) {
 
           const data = await response.json()
           onLogin(data.user)
+
+          // Clear any SDK-stored token just in case (defensive)
+          try {
+            if (window.Kakao && window.Kakao.Auth && typeof window.Kakao.Auth.setAccessToken === 'function') {
+              window.Kakao.Auth.setAccessToken('')
+            }
+          } catch (e) {
+            // ignore
+          }
         } catch (loginErr) {
           console.error('Kakao login error:', loginErr)
           setError(loginErr.message || '카카오 로그인에 실패했습니다.')
