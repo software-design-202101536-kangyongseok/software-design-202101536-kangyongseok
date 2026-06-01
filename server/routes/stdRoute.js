@@ -2,6 +2,7 @@ const express = require("express");
 const stdRouter = express.Router();
 const mongoose = require("mongoose");
 const Student = require("../models/student");
+const StudentApplication = require("../models/studentApplication");
 const Grade = require("../models/grade");
 const Attendance = require("../models/attendance");
 const Subject = require("../models/subject");
@@ -554,6 +555,155 @@ stdRouter.post("/", async (req, res) => {
   }
 });
 
+stdRouter.post("/applications", async (req, res) => {
+  try {
+    const { kakaoId, name, birthDate, gender, email, profileImage } = req.body;
+
+    const kakaoIdValidation = validateString(kakaoId || '', 1, 200);
+    if (!kakaoIdValidation.valid) {
+      return res.status(400).json({ message: `Kakao ID: ${kakaoIdValidation.error}` });
+    }
+
+    const nameValidation = validateString(name || '', 2, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Name: ${nameValidation.error}` });
+    }
+
+    const birthDateValidation = validateDate(birthDate || '');
+    if (!birthDateValidation.valid) {
+      return res.status(400).json({ message: `Birth date: ${birthDateValidation.error}` });
+    }
+
+    const genderValidation = gender ? validateEnum(gender, ['male', 'female']) : { valid: true, value: undefined };
+    if (!genderValidation.valid) {
+      return res.status(400).json({ message: `Gender: ${genderValidation.error}` });
+    }
+
+    const emailValidation = email ? validateString(email, 5, 200) : { valid: true, value: '' };
+    if (!emailValidation.valid) {
+      return res.status(400).json({ message: `Email: ${emailValidation.error}` });
+    }
+
+    const existingStudent = await Student.findOne({ kakaoId: kakaoIdValidation.value });
+    if (existingStudent) {
+      return res.status(400).json({ message: 'A student account is already linked to this Kakao ID' });
+    }
+
+    const existingStudentByName = await Student.findOne({ name: nameValidation.value });
+    if (existingStudentByName) {
+      return res.status(400).json({ message: 'A student with this name is already registered' });
+    }
+
+    const existingApplication = await StudentApplication.findOne({ kakaoId: kakaoIdValidation.value, status: 'pending' });
+    if (existingApplication) {
+      return res.status(400).json({ message: 'A student registration application is already pending for this Kakao account' });
+    }
+
+    const application = await StudentApplication.create({
+      kakaoId: kakaoIdValidation.value,
+      name: nameValidation.value,
+      birthDate: birthDateValidation.value,
+      gender: genderValidation.value,
+      email: emailValidation.value || undefined,
+      profileImage: profileImage ? profileImage.toString().trim() : undefined,
+    });
+
+    res.status(201).json({ message: 'Student registration application created', application });
+  } catch (err) {
+    console.error('Error creating student application:', err);
+    res.status(400).json({ message: err.message || 'Failed to create student application' });
+  }
+});
+
+stdRouter.get("/applications", async (req, res) => {
+  try {
+    const applications = await StudentApplication.find({}).sort({ createdAt: -1 });
+    res.status(200).json(applications);
+  } catch (err) {
+    console.error('Error fetching student applications:', err);
+    res.status(500).json({ message: err.message || 'Failed to fetch student applications' });
+  }
+});
+
+stdRouter.put("/applications/:id/approve", async (req, res) => {
+  try {
+    const appId = req.params.id;
+    if (!appId || !isValidObjectId(appId)) {
+      return res.status(400).json({ message: 'Valid application ID is required' });
+    }
+
+    const application = await StudentApplication.findById(appId);
+    if (!application) {
+      return res.status(404).json({ message: 'Student application not found' });
+    }
+
+    if (application.status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending applications can be approved' });
+    }
+
+    const existingStudent = await Student.findOne({ kakaoId: application.kakaoId });
+    if (existingStudent) {
+      return res.status(400).json({ message: 'A student account is already linked to this Kakao ID' });
+    }
+
+    const existingNameStudent = await Student.findOne({ name: application.name });
+    if (existingNameStudent) {
+      return res.status(400).json({ message: 'A student with this name already exists. Please update the existing student record or use a different name.' });
+    }
+
+    const studentData = {
+      name: application.name,
+      birthDate: application.birthDate,
+      gender: application.gender,
+      subject: ['미정'],
+      bio: '학생 등록 신청을 통해 생성된 기본 정보입니다.',
+      kakaoId: application.kakaoId,
+      parents: []
+    };
+
+    const student = new Student(studentData);
+    await student.save();
+
+    application.status = 'accepted';
+    application.reviewedAt = new Date();
+    await application.save();
+
+    res.status(200).json({ message: 'Student application approved', student, application });
+  } catch (err) {
+    console.error('Error approving student application:', err);
+    res.status(400).json({ message: err.message || 'Failed to approve student application' });
+  }
+});
+
+stdRouter.put("/applications/:id/reject", async (req, res) => {
+  try {
+    const appId = req.params.id;
+    if (!appId || !isValidObjectId(appId)) {
+      return res.status(400).json({ message: 'Valid application ID is required' });
+    }
+
+    const { rejectionReason } = req.body;
+    const application = await StudentApplication.findById(appId);
+    if (!application) {
+      return res.status(404).json({ message: 'Student application not found' });
+    }
+
+    if (application.status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending applications can be rejected' });
+    }
+
+    application.status = 'rejected';
+    application.rejectionReason = rejectionReason ? rejectionReason.toString().trim() : '';
+    application.reviewedAt = new Date();
+    await application.save();
+
+    res.status(200).json({ message: 'Student application rejected', application });
+  } catch (err) {
+    console.error('Error rejecting student application:', err);
+    res.status(400).json({ message: err.message || 'Failed to reject student application' });
+  }
+});
+
 stdRouter.put("/:name", async (req, res) => {
   try {
     const originalNameValidation = validateString(req.params.name, 2, 100);
@@ -624,25 +774,41 @@ stdRouter.put("/:name", async (req, res) => {
 
 stdRouter.delete("/", async (req, res) => {
   try {
-    const { name } = req.body;
-    
-    // Validate name
-    const nameValidation = validateString(name, 2, 100);
-    if (!nameValidation.valid) {
-      return res.status(400).json({ message: `Name: ${nameValidation.error}` });
+    const { name, studentId } = req.body;
+    let deletedStudent = null;
+
+    if (studentId) {
+      if (!isValidObjectId(studentId)) {
+        return res.status(400).json({ message: 'Valid studentId is required' });
+      }
+      deletedStudent = await Student.findByIdAndDelete(studentId);
+    } else {
+      const nameValidation = validateString(name, 2, 100);
+      if (!nameValidation.valid) {
+        return res.status(400).json({ message: `Name: ${nameValidation.error}` });
+      }
+      deletedStudent = await Student.findOneAndDelete({ name: nameValidation.value });
     }
-    
-    const result = await Student.findOneAndDelete({ name: nameValidation.value });
-    
-    if (!result) {
+
+    if (!deletedStudent) {
       return res.status(404).json({ 
-        message: `Student "${nameValidation.value}" not found`
+        message: studentId ? 'Student not found' : `Student "${name}" not found`
       });
     }
-    
+
+    const studentObjectId = deletedStudent._id;
+    await Promise.all([
+      Grade.deleteMany({ student: studentObjectId }),
+      Attendance.deleteMany({ student: studentObjectId }),
+      Feedback.deleteMany({ studentId: studentObjectId }),
+      Counseling.deleteMany({ studentId: studentObjectId }),
+      Notification.deleteMany({ studentId: studentObjectId }),
+      User.deleteMany({ studentId: studentObjectId })
+    ]);
+
     res.status(200).json({ 
-      message: `Student "${result.name}" deleted successfully`,
-      student: result 
+      message: `Student "${deletedStudent.name}" deleted successfully`,
+      student: deletedStudent 
     });
   } catch (err) {
     console.error('Error deleting student:', err);
@@ -1112,9 +1278,9 @@ stdRouter.post("/auth/kakao", async (req, res) => {
 
     let validatedStudentId = null;
     let linkedStudent = null;
-    if (userTypeValidation.value === 'student' || userTypeValidation.value === 'parent') {
+    if (userTypeValidation.value === 'parent') {
       if (!studentId || !isValidObjectId(studentId)) {
-        return res.status(400).json({ message: 'Student ID is required for student and parent users' });
+        return res.status(400).json({ message: 'Student ID is required for parent users' });
       }
       validatedStudentId = convertToObjectId(studentId);
       linkedStudent = await Student.findById(validatedStudentId);
@@ -1133,14 +1299,29 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       return res.status(400).json({ message: `Profile image: ${profileImageValidation.error}` });
     }
 
-    // Verify mapping rules before creating/updating user
     if (userTypeValidation.value === 'student') {
-      if (!linkedStudent.kakaoId) {
-        // First-time student login: link this Kakao account to the student record
-        linkedStudent.kakaoId = kakaoIdValidation.value;
-        await linkedStudent.save();
-      } else if (String(linkedStudent.kakaoId) !== String(kakaoIdValidation.value)) {
-        return res.status(403).json({ message: 'Student Kakao account not linked or does not match the provided Kakao ID' });
+      if (studentId && isValidObjectId(studentId)) {
+        validatedStudentId = convertToObjectId(studentId);
+        linkedStudent = await Student.findById(validatedStudentId);
+        if (!linkedStudent) {
+          return res.status(404).json({ message: 'Student not found' });
+        }
+        if (!linkedStudent.kakaoId) {
+          linkedStudent.kakaoId = kakaoIdValidation.value;
+          await linkedStudent.save();
+        } else if (String(linkedStudent.kakaoId) !== String(kakaoIdValidation.value)) {
+          return res.status(403).json({ message: 'Student Kakao account not linked or does not match the provided Kakao ID' });
+        }
+      } else {
+        linkedStudent = await Student.findOne({ kakaoId: kakaoIdValidation.value });
+        if (!linkedStudent) {
+          const pendingApplication = await StudentApplication.findOne({ kakaoId: kakaoIdValidation.value, status: 'pending' });
+          if (pendingApplication) {
+            return res.status(403).json({ message: 'Student registration application is still pending approval' });
+          }
+          return res.status(403).json({ message: 'Student Kakao account is not linked to an approved student record' });
+        }
+        validatedStudentId = linkedStudent._id;
       }
     }
 

@@ -80,6 +80,8 @@ function App() {
   const [allStudents, setAllStudents] = useState([])
   const [allStudentsLoading, setAllStudentsLoading] = useState(false)
   const [allStudentsError, setAllStudentsError] = useState('')
+  const [applications, setApplications] = useState([])
+  const [applicationsLoading, setApplicationsLoading] = useState(false)
 
   // Settings state
   const [subjects, setSubjects] = useState(defaultSubjects)
@@ -505,6 +507,10 @@ function App() {
       fetchSubjects()
     }
     fetchSubjects() // Always fetch subjects for register/edit
+
+    if (activeTab === 'register' && user.userType === 'teacher') {
+      fetchApplications()
+    }
 
     if (activeTab === 'search') {
       if (user.userType === 'student') {
@@ -944,6 +950,8 @@ function App() {
       kakaoId: '',
       parents: [{ name: '', kakaoId: '', email: '' }]
     })
+    setApplications([])
+    setApplicationsLoading(false)
     setNewSubject('')
   }
 
@@ -1011,6 +1019,79 @@ function App() {
     } finally {
       setAllStudentsLoading(false)
 
+    }
+  }
+
+  const fetchApplications = async () => {
+    setApplicationsLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/applications`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch student applications')
+      }
+      const data = await response.json()
+      setApplications(data)
+    } catch (err) {
+      console.error('Error fetching applications:', err)
+      setApplications([])
+    } finally {
+      setApplicationsLoading(false)
+    }
+  }
+
+  const handleApproveApplication = async (applicationId) => {
+    setError('')
+    setSuccess('')
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/applications/${applicationId}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to approve application')
+      }
+      const data = await response.json()
+      setSuccess(`Application for ${data.student.name} approved and added to the student list.`)
+      await fetchApplications()
+      fetchAllStudents()
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setError('Network error: Unable to connect to server. Please check if the server is running.')
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRejectApplication = async (applicationId) => {
+    setError('')
+    setSuccess('')
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/applications/${applicationId}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectionReason: '' })
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to reject application')
+      }
+      await response.json()
+      setSuccess('Application rejected successfully.')
+      await fetchApplications()
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setError('Network error: Unable to connect to server. Please check if the server is running.')
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -1277,6 +1358,45 @@ function App() {
       await fetchStudent(editData.name.trim(), false)
       setShowStudentModal(true) // 모달이 닫혀있을 경우 다시 열기
       setShowEditModal(false)
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setError('Network error: Unable to connect to server.')
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteStudent = async () => {
+    if (!window.confirm('정말로 이 학생을 삭제하시겠습니까? 삭제하면 해당 학생의 모든 성적과 관련 기록이 함께 제거됩니다.')) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_URL}/students`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ studentId: studentData.studentId })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to delete student')
+      }
+
+      setSuccess(`Student "${studentData.username}" deleted successfully.`)
+      setShowEditModal(false)
+      setShowStudentModal(false)
+      setStudentData(null)
+      await fetchAllStudents()
     } catch (err) {
       if (err instanceof TypeError) {
         setError('Network error: Unable to connect to server.')
@@ -1793,6 +1913,23 @@ function App() {
                   부모 추가
                 </button>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <button 
+                type="button"
+                onClick={handleDeleteStudent}
+                disabled={loading}
+                style={{ 
+                  padding: '10px 16px', 
+                  backgroundColor: '#d32f2f',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                삭제
+              </button>
               <button 
                 type="submit" 
                 disabled={loading}
@@ -1808,6 +1945,7 @@ function App() {
               >
                 {loading ? 'Updating...' : '정보 수정'}
               </button>
+            </div>
             </form>
             {success && <p style={{ color: '#388e3c', marginTop: '10px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>{success}</p>}
             {error && <p style={{ color: 'red', marginTop: '10px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>{error}</p>}
@@ -1937,7 +2075,57 @@ function App() {
       )}
 
       {activeTab === 'register' && (
-        <section style={{ maxWidth: '500px' }}>
+        <section style={{ maxWidth: '700px' }}>
+          {user.userType === 'teacher' && (
+            <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
+              <h2 style={{ marginTop: 0 }}>학생 등록 신청 관리</h2>
+              {applicationsLoading ? (
+                <p>등록 신청서를 불러오는 중입니다...</p>
+              ) : applications.length === 0 ? (
+                <p>현재 대기 중인 학생 등록 신청이 없습니다.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {applications.map((app) => (
+                    <div key={app._id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                        <div>
+                          <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{app.name}</p>
+                          <p style={{ margin: 0, color: '#555' }}>생년월일: {app.birthDate ? new Date(app.birthDate).toLocaleDateString('ko-KR') : '알 수 없음'}</p>
+                          <p style={{ margin: 0, color: '#555' }}>성별: {app.gender || '미지정'}</p>
+                          <p style={{ margin: 0, color: '#555' }}>상태: {app.status === 'pending' ? '대기' : app.status === 'accepted' ? '승인' : '거절'}</p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          {app.status === 'pending' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveApplication(app._id)}
+                                disabled={loading}
+                                style={{ padding: '8px 14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
+                              >
+                                승인
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectApplication(app._id)}
+                                disabled={loading}
+                                style={{ padding: '8px 14px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
+                              >
+                                반려
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {app.rejectionReason && (
+                        <p style={{ margin: '10px 0 0 0', color: '#d32f2f' }}>반려 사유: {app.rejectionReason}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <form onSubmit={handleRegisterStudent} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>학생 이름</label>
