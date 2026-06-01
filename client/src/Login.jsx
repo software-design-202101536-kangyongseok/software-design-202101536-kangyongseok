@@ -71,16 +71,47 @@ function Login({ onLogin }) {
       window.Kakao.init(KAKAO_JS_KEY)
     }
 
-    // Use Promise-based API for newer Kakao SDK versions
+    // Use Kakao login with callback/promise compatibility
     const loginWithKakao = async () => {
       try {
-        await window.Kakao.Auth.login({
-          persistAccessToken: false,
-          persistRefreshToken: false,
+        const authObj = await new Promise((resolve, reject) => {
+          let resolved = false
+          const callback = {
+            persistAccessToken: false,
+            persistRefreshToken: false,
+            success: (authResult) => {
+              if (!resolved) {
+                resolved = true
+                resolve(authResult)
+              }
+            },
+            fail: (authError) => {
+              if (!resolved) {
+                resolved = true
+                reject(authError)
+              }
+            }
+          }
+
+          const result = window.Kakao.Auth.login(callback)
+          if (result && typeof result.then === 'function') {
+            result.then((authResult) => {
+              if (!resolved) {
+                resolved = true
+                resolve(authResult)
+              }
+            }).catch((authError) => {
+              if (!resolved) {
+                resolved = true
+                reject(authError)
+              }
+            })
+          }
         })
 
-        const token = window.Kakao.Auth.getAccessToken()
+        const token = authObj?.access_token || window.Kakao.Auth.getAccessToken()
         if (!token) {
+          console.error('Kakao auth object:', authObj)
           throw new Error('Failed to get Kakao access token')
         }
 
