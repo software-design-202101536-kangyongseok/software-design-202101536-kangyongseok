@@ -498,6 +498,13 @@ stdRouter.get("/all", async (req, res) => {
 
 stdRouter.post("/", async (req, res) => {
   try {
+    // This endpoint expects subject field - if not present, it's not for this route
+    if (!req.body.subject) {
+      return res.status(400).json({ 
+        message: 'Subject field is required for student creation' 
+      });
+    }
+
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB not connected - cannot create student');
       return res.status(503).json({ message: 'Database not connected' });
@@ -557,6 +564,9 @@ stdRouter.post("/", async (req, res) => {
 
 stdRouter.post("/applications", async (req, res) => {
   try {
+    console.log('=== POST /applications received ===');
+    console.log('Body:', req.body);
+    
     const { kakaoId, name, birthDate, gender, email, profileImage } = req.body;
 
     const kakaoIdValidation = validateString(kakaoId || '', 1, 200);
@@ -615,6 +625,7 @@ stdRouter.post("/applications", async (req, res) => {
     res.status(201).json({ message: 'Student registration application created', application });
   } catch (err) {
     console.error('Error creating student application:', err);
+    console.error('Error stack:', err.stack);
     res.status(400).json({ message: err.message || 'Failed to create student application' });
   }
 });

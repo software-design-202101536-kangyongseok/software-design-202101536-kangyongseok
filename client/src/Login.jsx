@@ -71,101 +71,107 @@ function Login({ onLogin }) {
       window.Kakao.init(KAKAO_JS_KEY)
     }
 
-    window.Kakao.Auth.login({
-      // Do not persist tokens in the SDK (prevents automatic re-login/cache)
-      persistAccessToken: false,
-      persistRefreshToken: false,
-      success: async (authObj) => {
-        try {
-          const token = authObj.access_token
-          const profileResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          })
-          const profileData = await profileResponse.json()
-          const kakaoId = String(profileData.id)
-          const kakaoAccount = profileData.kakao_account || {}
-          const nickname = profileData.properties?.nickname || kakaoAccount.profile?.nickname || '카카오 사용자'
-          const email = kakaoAccount.email || ''
-          const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
+    // Use Promise-based API for newer Kakao SDK versions
+    const loginWithKakao = async () => {
+      try {
+        await window.Kakao.Auth.login({
+          persistAccessToken: false,
+          persistRefreshToken: false,
+        })
 
-          const linkedStudent = students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
-
-          if (mode === 'login') {
-            if (userType === 'parent' && !selectedStudent) {
-              setError('학생을 선택해주세요.')
-              return
-            }
-
-            if (userType === 'parent' && !linkedStudent) {
-              setError('선택한 학생이 등록된 학생 목록에 없습니다.')
-              return
-            }
-          }
-
-          const payload = {
-            kakaoId,
-            username: nickname,
-            name: nickname,
-            email,
-            profileImage,
-            userType: mode === 'apply' ? 'student' : userType,
-            studentId: mode === 'login' && (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined,
-            birthDate: (() => {
-              const birthday = kakaoAccount.birthday || ''
-              const birthyear = kakaoAccount.birthyear || ''
-              if (birthyear && birthday && birthday.length === 4) {
-                const month = birthday.slice(0, 2)
-                const day = birthday.slice(2, 4)
-                if (/^(0[1-9]|1[0-2])$/.test(month) && /^(0[1-9]|[12][0-9]|3[01])$/.test(day)) {
-                  return `${birthyear}-${month}-${day}`
-                }
-              }
-              return ''
-            })(),
-            gender: kakaoAccount.gender || ''
-          }
-
-          const endpoint = mode === 'apply' ? `${API_URL}/students/applications` : `${API_URL}/students/auth/kakao`
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.message || (mode === 'apply' ? 'Registration application failed' : 'Kakao login failed'))
-          }
-
-          const data = await response.json()
-
-          if (mode === 'apply') {
-            setSuccessMessage('학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
-            setError('')
-          } else {
-            onLogin(data.user)
-          }
-
-          // Clear any SDK-stored token just in case (defensive)
-          try {
-            if (window.Kakao && window.Kakao.Auth && typeof window.Kakao.Auth.setAccessToken === 'function') {
-              window.Kakao.Auth.setAccessToken('')
-            }
-          } catch (e) {
-            // ignore
-          }
-        } catch (loginErr) {
-          console.error('Kakao login error:', loginErr)
-          setError(loginErr.message || '카카오 로그인에 실패했습니다.')
+        const token = window.Kakao.Auth.getAccessToken()
+        if (!token) {
+          throw new Error('Failed to get Kakao access token')
         }
-      },
-      fail: (err) => {
-        console.error('Kakao auth fail:', err)
-        setError('카카오 로그인 중 오류가 발생했습니다.')
+
+        const profileResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+
+        if (!profileResponse.ok) {
+          throw new Error('Failed to fetch Kakao profile')
+        }
+
+        const profileData = await profileResponse.json()
+        const kakaoId = String(profileData.id)
+        const kakaoAccount = profileData.kakao_account || {}
+        const nickname = profileData.properties?.nickname || kakaoAccount.profile?.nickname || '카카오 사용자'
+        const email = kakaoAccount.email || ''
+        const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
+
+        const linkedStudent = students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
+
+        if (mode === 'login') {
+          if (userType === 'parent' && !selectedStudent) {
+            setError('학생을 선택해주세요.')
+            return
+          }
+
+          if (userType === 'parent' && !linkedStudent) {
+            setError('선택한 학생이 등록된 학생 목록에 없습니다.')
+            return
+          }
+        }
+
+        const payload = {
+          kakaoId,
+          username: nickname,
+          name: nickname,
+          email,
+          profileImage,
+          userType: mode === 'apply' ? 'student' : userType,
+          studentId: mode === 'login' && (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined,
+          birthDate: (() => {
+            const birthday = kakaoAccount.birthday || ''
+            const birthyear = kakaoAccount.birthyear || ''
+            if (birthyear && birthday && birthday.length === 4) {
+              const month = birthday.slice(0, 2)
+              const day = birthday.slice(2, 4)
+              if (/^(0[1-9]|1[0-2])$/.test(month) && /^(0[1-9]|[12][0-9]|3[01])$/.test(day)) {
+                return `${birthyear}-${month}-${day}`
+              }
+            }
+            return ''
+          })(),
+          gender: kakaoAccount.gender || ''
+        }
+
+        const endpoint = mode === 'apply' ? `${API_URL}/students/applications` : `${API_URL}/students/auth/kakao`
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.message || (mode === 'apply' ? 'Registration application failed' : 'Kakao login failed'))
+        }
+
+        const data = await response.json()
+
+        if (mode === 'apply') {
+          setSuccessMessage('학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
+          setError('')
+        } else {
+          onLogin(data.user)
+        }
+
+        // Clear token
+        try {
+          window.Kakao.Auth.setAccessToken(null)
+        } catch (e) {
+          // ignore
+        }
+      } catch (loginErr) {
+        console.error('Kakao login error:', loginErr)
+        setError(loginErr.message || '카카오 로그인에 실패했습니다.')
       }
-    })
+    }
+
+    loginWithKakao()
   }
 
   const handleSubmit = async (e) => {
