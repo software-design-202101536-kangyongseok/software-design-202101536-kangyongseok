@@ -75,37 +75,18 @@ function Login({ onLogin }) {
     const loginWithKakao = async () => {
       try {
         const authObj = await new Promise((resolve, reject) => {
-          let resolved = false
           const callback = {
-            persistAccessToken: false,
-            persistRefreshToken: false,
             success: (authResult) => {
-              if (!resolved) {
-                resolved = true
-                resolve(authResult)
-              }
+              resolve(authResult)
             },
             fail: (authError) => {
-              if (!resolved) {
-                resolved = true
-                reject(authError)
-              }
+              reject(authError)
             }
           }
 
           const result = window.Kakao.Auth.login(callback)
           if (result && typeof result.then === 'function') {
-            result.then((authResult) => {
-              if (!resolved) {
-                resolved = true
-                resolve(authResult)
-              }
-            }).catch((authError) => {
-              if (!resolved) {
-                resolved = true
-                reject(authError)
-              }
-            })
+            result.then(resolve).catch(reject)
           }
         })
 
@@ -202,7 +183,7 @@ function Login({ onLogin }) {
       }
     }
 
-    loginWithKakao()
+    await loginWithKakao()
   }
 
   const handleSubmit = async (e) => {
