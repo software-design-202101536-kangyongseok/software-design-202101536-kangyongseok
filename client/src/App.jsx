@@ -923,10 +923,26 @@ function App() {
     setUnreadNotifications(0)
     setNotificationsLoading(false)
     setNotificationsError('')
-    setFormData({ name: '', birthDate: '', gender: '', subject: [], bio: '' })
+    setFormData({
+      name: '',
+      birthDate: '',
+      gender: '',
+      subject: [],
+      bio: '',
+      kakaoId: '',
+      parents: [{ name: '', kakaoId: '', email: '' }]
+    })
     setGradeData({ subject: '', score: '', year: new Date().getFullYear(), term: 1 })
     setAttendanceData({ date: new Date().toISOString().split('T')[0], status: 'present' })
-    setEditData({ name: '', birthDate: '', gender: '', subject: [], bio: '' })
+    setEditData({
+      name: '',
+      birthDate: '',
+      gender: '',
+      subject: [],
+      bio: '',
+      kakaoId: '',
+      parents: [{ name: '', kakaoId: '', email: '' }]
+    })
     setNewSubject('')
   }
 
