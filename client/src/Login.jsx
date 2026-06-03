@@ -76,6 +76,7 @@ function Login({ onLogin }) {
       try {
         const authObj = await new Promise((resolve, reject) => {
           const callback = {
+            scope: 'profile_nickname, account_email, gender',
             success: (authResult) => {
               resolve(authResult)
             },
@@ -114,7 +115,11 @@ function Login({ onLogin }) {
         const profileData = await profileResponse.json()
         const kakaoId = String(profileData.id)
         const kakaoAccount = profileData.kakao_account || {}
-        const realName = kakaoAccount.profile?.nickname || profileData.properties?.nickname || '카카오 사용자'
+        const realName = kakaoAccount.profile?.nickname
+          || profileData.properties?.nickname
+          || profileData.kakao_account?.profile?.nickname
+          || profileData.kakao_account?.profile?.displayName
+          || '카카오 사용자'
         const email = kakaoAccount.email || ''
         const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
 
