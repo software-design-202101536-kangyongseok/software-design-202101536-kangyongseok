@@ -121,7 +121,9 @@ function Login({ onLogin }) {
           || profileData.kakao_account?.profile?.displayName
           || '카카오 사용자'
 
-        const linkedStudent = students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
+        const linkedStudent = userType === 'parent'
+          ? students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
+          : null
 
         if (mode === 'login') {
           if (userType === 'parent' && !selectedStudent) {
@@ -142,7 +144,7 @@ function Login({ onLogin }) {
           username: realName,
           name: realName,
           userType: mode === 'apply' ? 'student' : userType,
-          studentId: mode === 'login' && (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
+          studentId: mode === 'login' && userType === 'parent' ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
         }
 
         const endpoint = mode === 'apply' ? `${API_URL}/students/applications` : `${API_URL}/students/auth/kakao`
