@@ -1046,34 +1046,6 @@ function App() {
     }
   }
 
-  const handleApproveApplication = async (applicationId) => {
-    setError('')
-    setSuccess('')
-    setLoading(true)
-    try {
-      const response = await fetch(`${API_URL}/students/applications/${applicationId}/approve`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to approve application')
-      }
-      const data = await response.json()
-      setSuccess(`Application for ${data.student.name} approved and added to the student list.`)
-      await fetchApplications()
-      fetchAllStudents()
-    } catch (err) {
-      if (err instanceof TypeError) {
-        setError('Network error: Unable to connect to server. Please check if the server is running.')
-      } else {
-        setError(err.message)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleRejectApplication = async (applicationId) => {
     setError('')
     setSuccess('')
