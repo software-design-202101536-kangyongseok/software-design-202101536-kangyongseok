@@ -830,6 +830,69 @@ stdRouter.put("/applications/:id/reject", async (req, res) => {
   }
 });
 
+stdRouter.post("/:studentId/add-parent", async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { kakaoId, name } = req.body;
+
+    // Validate studentId
+    if (!studentId || !isValidObjectId(studentId)) {
+      return res.status(400).json({ message: 'Valid Student ID is required' });
+    }
+
+    // Validate kakaoId
+    const kakaoIdValidation = validateString(kakaoId || '', 1, 200);
+    if (!kakaoIdValidation.valid) {
+      return res.status(400).json({ message: `Kakao ID: ${kakaoIdValidation.error}` });
+    }
+
+    // Validate parent name
+    const nameValidation = validateString(name || '', 1, 100);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ message: `Parent name: ${nameValidation.error}` });
+    }
+
+    // Find student
+    const student = await Student.findById(convertToObjectId(studentId));
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Check if parent already exists
+    const existingParent = Array.isArray(student.parents) && student.parents.find(p => 
+      String(p.kakaoId) === String(kakaoIdValidation.value)
+    );
+
+    if (existingParent) {
+      return res.status(400).json({ message: 'This parent is already registered for this student' });
+    }
+
+    // Add parent
+    if (!Array.isArray(student.parents)) {
+      student.parents = [];
+    }
+
+    student.parents.push({
+      name: nameValidation.value,
+      kakaoId: kakaoIdValidation.value,
+      email: ''
+    });
+
+    await student.save();
+    await upsertStudentBackup(student);
+
+    res.status(200).json({ 
+      message: 'Parent added successfully', 
+      student 
+    });
+  } catch (err) {
+    console.error('Error adding parent:', err);
+    res.status(400).json({ 
+      message: err.message || 'Failed to add parent' 
+    });
+  }
+});
+
 stdRouter.put("/:name", async (req, res) => {
   try {
     const originalNameValidation = validateString(req.params.name, 2, 100);

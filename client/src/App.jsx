@@ -3,6 +3,7 @@ import './App.css'
 import Login from './Login'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
+const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY || ''
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -1568,6 +1569,95 @@ function App() {
     setIsLoggedIn(true)
   }
 
+  const handleRegisterParentKakao = async () => {
+    if (!window.Kakao) {
+      alert('카카오 SDK 로딩에 실패했습니다. 페이지를 새로고침 해주세요.')
+      return
+    }
+
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY)
+    }
+
+    try {
+      const authObj = await new Promise((resolve, reject) => {
+        const callback = {
+          scope: 'profile_nickname',
+          success: (authResult) => {
+            resolve(authResult)
+          },
+          fail: (authError) => {
+            reject(authError)
+          }
+        }
+
+        try {
+          const result = window.Kakao.Auth.login(callback)
+          if (result && typeof result.then === 'function') {
+            result.then(resolve).catch(reject)
+          }
+        } catch (err) {
+          reject(err)
+        }
+      })
+
+      const token = authObj?.access_token || window.Kakao.Auth.getAccessToken()
+      if (!token) {
+        throw new Error('Failed to get Kakao access token')
+      }
+
+      const profileResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (!profileResponse.ok) {
+        throw new Error('Failed to fetch Kakao profile')
+      }
+
+      const profileData = await profileResponse.json()
+      const kakaoId = String(profileData.id)
+      const kakaoAccount = profileData.kakao_account || {}
+      const realName = kakaoAccount.profile?.nickname
+        || profileData.properties?.nickname
+        || profileData.kakao_account?.profile?.nickname
+        || profileData.kakao_account?.profile?.displayName
+        || '카카오 사용자'
+
+      // Add parent to current student
+      const response = await fetch(`${API_URL}/students/${user.studentId}/add-parent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kakaoId,
+          name: realName
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to add parent')
+      }
+
+      alert('부모 계정이 성공적으로 등록되었습니다!')
+
+      // Refresh student data to reflect new parent
+      if (studentData && studentData.studentId) {
+        await fetchStudent(studentData.username, false)
+      }
+
+      try {
+        window.Kakao.Auth.setAccessToken(null)
+      } catch (e) {
+        // ignore
+      }
+    } catch (err) {
+      console.error('Parent registration error:', err)
+      alert(err.message || '부모 계정 등록에 실패했습니다.')
+    }
+  }
+
   const handleLogout = () => {
     // Reset local app state
     resetSessionState()
@@ -1596,6 +1686,22 @@ function App() {
         <h1 style={{ textAlign: 'center', color: '#333' }}>Student Management System</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ marginRight: '10px' }}>환영합니다, {user.username} ({user.userType === 'teacher' ? '교사' : user.userType === 'student' ? '학생' : '학부모'})</span>
+          {user.userType === 'student' && (
+            <button
+              onClick={handleRegisterParentKakao}
+              style={{
+                padding: '5px 12px',
+                backgroundColor: '#FF6F00',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              부모 계정 등록
+            </button>
+          )}
           {(user.userType === 'student' || user.userType === 'parent') && (
             <button
               onClick={handleNotificationsClick}
