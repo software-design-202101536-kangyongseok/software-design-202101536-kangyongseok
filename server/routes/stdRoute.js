@@ -656,6 +656,34 @@ stdRouter.put("/applications/:id/approve", async (req, res) => {
       return res.status(400).json({ message: 'Only pending applications can be approved' });
     }
 
+    const { birthDate, gender } = req.body || {}
+    let resolvedBirthDate = application.birthDate
+    let resolvedGender = application.gender
+
+    if (!resolvedBirthDate && birthDate) {
+      const birthDateValidation = validateDate(birthDate)
+      if (!birthDateValidation.valid) {
+        return res.status(400).json({ message: `Birth date: ${birthDateValidation.error}` })
+      }
+      resolvedBirthDate = birthDateValidation.value
+    }
+
+    if (!resolvedGender && gender) {
+      const genderValidation = validateEnum(gender, ['male', 'female'])
+      if (!genderValidation.valid) {
+        return res.status(400).json({ message: `Gender: ${genderValidation.error}` })
+      }
+      resolvedGender = genderValidation.value
+    }
+
+    if (!resolvedBirthDate) {
+      return res.status(400).json({ message: 'Birth date is required to approve this application' })
+    }
+
+    if (!resolvedGender) {
+      return res.status(400).json({ message: 'Gender is required to approve this application' })
+    }
+
     const existingStudent = await Student.findOne({ kakaoId: application.kakaoId });
     if (existingStudent) {
       return res.status(400).json({ message: 'A student account is already linked to this Kakao ID' });

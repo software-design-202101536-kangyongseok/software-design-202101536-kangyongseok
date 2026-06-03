@@ -82,6 +82,13 @@ function App() {
   const [allStudentsError, setAllStudentsError] = useState('')
   const [applications, setApplications] = useState([])
   const [applicationsLoading, setApplicationsLoading] = useState(false)
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false)
+  const [approvalFormData, setApprovalFormData] = useState({
+    applicationId: '',
+    name: '',
+    birthDate: '',
+    gender: ''
+  })
 
   // Settings state
   const [subjects, setSubjects] = useState(defaultSubjects)
@@ -1125,6 +1132,96 @@ function App() {
     }
   }
 
+  const handleApprovalFormChange = (e) => {
+    const { name, value } = e.target
+    setApprovalFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const openApprovalModal = (application) => {
+    setError('')
+    setSuccess('')
+    setApprovalFormData({
+      applicationId: application._id,
+      name: application.name || '',
+      birthDate: application.birthDate ? new Date(application.birthDate).toISOString().split('T')[0] : '',
+      gender: application.gender || ''
+    })
+    setApprovalModalOpen(true)
+  }
+
+  const closeApprovalModal = () => {
+    setApprovalModalOpen(false)
+    setApprovalFormData({ applicationId: '', name: '', birthDate: '', gender: '' })
+  }
+
+  const validateApprovalData = () => {
+    if (!approvalFormData.name || !approvalFormData.name.trim()) {
+      return 'Student name is required'
+    }
+    if (!approvalFormData.birthDate) {
+      return 'Birth date is required'
+    }
+    const birthDateError = validateBirthDate(approvalFormData.birthDate)
+    if (birthDateError) return birthDateError
+    if (!approvalFormData.gender || !['male', 'female'].includes(approvalFormData.gender)) {
+      return 'Gender is required and must be male or female'
+    }
+    return null
+  }
+
+  const approveApplicationRequest = async (applicationId, approvalBody = {}) => {
+    setError('')
+    setSuccess('')
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/applications/${applicationId}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(approvalBody)
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to approve application')
+      }
+      const data = await response.json()
+      setSuccess(`Application for ${data.student.name} approved and added to the student list.`)
+      await fetchApplications()
+      fetchAllStudents()
+      closeApprovalModal()
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setError('Network error: Unable to connect to server. Please check if the server is running.')
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApproveApplication = async (application) => {
+    if (!application.birthDate || !application.gender) {
+      openApprovalModal(application)
+      return
+    }
+    await approveApplicationRequest(application._id)
+  }
+
+  const submitApprovalForm = async () => {
+    const validationError = validateApprovalData()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    await approveApplicationRequest(approvalFormData.applicationId, {
+      birthDate: approvalFormData.birthDate,
+      gender: approvalFormData.gender
+    })
+  }
+
   const handleParentChange = (index, field, value, isEdit = false) => {
     const setter = isEdit ? setEditData : setFormData
     setter(prev => {
@@ -2084,45 +2181,80 @@ function App() {
               ) : applications.length === 0 ? (
                 <p>현재 대기 중인 학생 등록 신청이 없습니다.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {applications.map((app) => (
-                    <div key={app._id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                        <div>
-                          <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{app.name}</p>
-                          <p style={{ margin: 0, color: '#555' }}>생년월일: {app.birthDate ? new Date(app.birthDate).toLocaleDateString('ko-KR') : '알 수 없음'}</p>
-                          <p style={{ margin: 0, color: '#555' }}>성별: {app.gender || '미지정'}</p>
-                          <p style={{ margin: 0, color: '#555' }}>상태: {app.status === 'pending' ? '대기' : app.status === 'accepted' ? '승인' : '거절'}</p>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          {app.status === 'pending' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleApproveApplication(app._id)}
-                                disabled={loading}
-                                style={{ padding: '8px 14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
-                              >
-                                승인
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRejectApplication(app._id)}
-                                disabled={loading}
-                                style={{ padding: '8px 14px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
-                              >
-                                반려
-                              </button>
-                            </>
-                          )}
+                <>
+                  {approvalModalOpen && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.45)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <div style={{ width: '100%', maxWidth: '480px', backgroundColor: '#fff', borderRadius: '10px', padding: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', position: 'relative' }}>
+                        <button onClick={closeApprovalModal} aria-label="승인 정보 창 닫기" style={{ position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#333' }}>×</button>
+                        <h2 style={{ marginTop: 0 }}>학생 등록 승인</h2>
+                        <p style={{ marginBottom: '18px', color: '#555' }}>누락된 정보를 입력한 후 승인을 진행해주세요.</p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>학생 이름</label>
+                            <input type="text" name="name" value={approvalFormData.name} disabled style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '6px', backgroundColor: '#f5f5f5' }} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>생년월일</label>
+                            <input type="date" name="birthDate" value={approvalFormData.birthDate} onChange={handleApprovalFormChange} style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '6px' }} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>성별</label>
+                            <select name="gender" value={approvalFormData.gender} onChange={handleApprovalFormChange} style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '6px' }}>
+                              <option value="">선택하세요</option>
+                              <option value="male">남성</option>
+                              <option value="female">여성</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                            <button type="button" onClick={closeApprovalModal} style={{ padding: '10px 18px', border: '1px solid #ccc', borderRadius: '6px', backgroundColor: '#fff', color: '#333', cursor: 'pointer' }}>취소</button>
+                            <button type="button" onClick={submitApprovalForm} disabled={loading} style={{ padding: '10px 18px', border: 'none', borderRadius: '6px', backgroundColor: '#4CAF50', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? '승인 중...' : '승인'}</button>
+                          </div>
                         </div>
                       </div>
-                      {app.rejectionReason && (
-                        <p style={{ margin: '10px 0 0 0', color: '#d32f2f' }}>반려 사유: {app.rejectionReason}</p>
-                      )}
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {applications.map((app) => (
+                      <div key={app._id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                          <div>
+                            <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{app.name}</p>
+                            <p style={{ margin: 0, color: '#555' }}>생년월일: {app.birthDate ? new Date(app.birthDate).toLocaleDateString('ko-KR') : '알 수 없음'}</p>
+                            <p style={{ margin: 0, color: '#555' }}>성별: {app.gender || '미지정'}</p>
+                            <p style={{ margin: 0, color: '#555' }}>상태: {app.status === 'pending' ? '대기' : app.status === 'accepted' ? '승인' : '거절'}</p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {app.status === 'pending' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveApplication(app)}
+                                  disabled={loading}
+                                  style={{ padding: '8px 14px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
+                                >
+                                  승인
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectApplication(app._id)}
+                                  disabled={loading}
+                                  style={{ padding: '8px 14px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
+                                >
+                                  반려
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {app.rejectionReason && (
+                          <p style={{ margin: '10px 0 0 0', color: '#d32f2f' }}>반려 사유: {app.rejectionReason}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
