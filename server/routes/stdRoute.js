@@ -2,14 +2,23 @@ const express = require("express");
 const stdRouter = express.Router();
 const mongoose = require("mongoose");
 const Student = require("../models/student");
+const StudentBackup = require("../models/studentBackup");
 const StudentApplication = require("../models/studentApplication");
+const StudentApplicationBackup = require("../models/studentApplicationBackup");
 const Grade = require("../models/grade");
+const GradeBackup = require("../models/gradeBackup");
 const Attendance = require("../models/attendance");
+const AttendanceBackup = require("../models/attendanceBackup");
 const Subject = require("../models/subject");
+const SubjectBackup = require("../models/subjectBackup");
 const User = require("../models/user");
+const UserBackup = require("../models/userBackup");
 const Feedback = require("../models/feedback");
+const FeedbackBackup = require("../models/feedbackBackup");
 const Notification = require("../models/notification");
+const NotificationBackup = require("../models/notificationBackup");
 const Counseling = require("../models/counseling");
+const CounselingBackup = require("../models/counselingBackup");
 const ExcelJS = require('exceljs');
 
 // ==================== Input Validation Utilities ====================
@@ -212,6 +221,71 @@ const formatKoreanDateTime = (value) => {
     hour: '2-digit',
     minute: '2-digit'
   });
+};
+
+const upsertStudentBackup = async (student) => {
+  if (!student || !student._id) return null;
+
+  const backupData = {
+    serviceStudentId: student._id,
+    name: student.name,
+    birthDate: student.birthDate,
+    gender: student.gender,
+    subject: Array.isArray(student.subject) ? student.subject : (student.subject ? [student.subject] : []),
+    bio: student.bio,
+    kakaoId: student.kakaoId || undefined,
+    parents: Array.isArray(student.parents) ? student.parents : [],
+    originalCreatedAt: student.createdAt || undefined,
+    updatedAt: new Date()
+  };
+
+  return StudentBackup.findOneAndUpdate(
+    { serviceStudentId: student._id },
+    backupData,
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+};
+
+const removeStudentBackup = async (studentId) => {
+  if (!studentId) return;
+  await StudentBackup.deleteOne({ serviceStudentId: studentId });
+};
+
+const upsertBackupRecord = async (BackupModel, serviceIdField, doc) => {
+  if (!doc || !doc._id) return null;
+
+  const objectData = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  const backupData = {
+    [serviceIdField]: doc._id,
+    data: objectData,
+    originalCreatedAt: objectData.createdAt || undefined,
+    originalUpdatedAt: objectData.updatedAt || undefined,
+    updatedAt: new Date()
+  };
+
+  return BackupModel.findOneAndUpdate(
+    { [serviceIdField]: doc._id },
+    backupData,
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+};
+
+const removeBackupRecord = async (BackupModel, serviceIdField, serviceId) => {
+  if (!serviceId) return;
+  await BackupModel.deleteOne({ [serviceIdField]: serviceId });
+};
+
+const createNotificationWithBackup = async (notificationProps) => {
+  const notification = await Notification.create(notificationProps);
+  await upsertBackupRecord(NotificationBackup, 'serviceNotificationId', notification);
+  return notification;
+};
+
+const backupMultipleNotifications = async (notifications) => {
+  if (!Array.isArray(notifications) || notifications.length === 0) return;
+  await Promise.all(
+    notifications.map((notification) => upsertBackupRecord(NotificationBackup, 'serviceNotificationId', notification))
+  );
 };
 
 const getGradeSummary = (grades) => {
@@ -553,6 +627,7 @@ stdRouter.post("/", async (req, res) => {
     const student = new Student(studentData);
     
     const newStudent = await student.save();
+    await upsertStudentBackup(newStudent);
     res.status(201).json(newStudent);
   } catch (err) {
     console.error('Error creating student:', err);
@@ -621,6 +696,8 @@ stdRouter.post("/applications", async (req, res) => {
       email: emailValidation.value || undefined,
       profileImage: profileImage ? profileImage.toString().trim() : undefined,
     });
+
+    await upsertBackupRecord(StudentApplicationBackup, 'serviceApplicationId', application);
 
     res.status(201).json({ message: 'Student registration application created', application });
   } catch (err) {
@@ -706,12 +783,14 @@ stdRouter.put("/applications/:id/approve", async (req, res) => {
 
     const student = new Student(studentData);
     await student.save();
+    await upsertStudentBackup(student);
 
     application.status = 'accepted';
     application.reviewedAt = new Date();
     application.birthDate = resolvedBirthDate;
     application.gender = resolvedGender;
     await application.save();
+    await upsertBackupRecord(StudentApplicationBackup, 'serviceApplicationId', application);
 
     res.status(200).json({ message: 'Student application approved', student, application });
   } catch (err) {
@@ -741,6 +820,7 @@ stdRouter.put("/applications/:id/reject", async (req, res) => {
     application.rejectionReason = rejectionReason ? rejectionReason.toString().trim() : '';
     application.reviewedAt = new Date();
     await application.save();
+    await upsertBackupRecord(StudentApplicationBackup, 'serviceApplicationId', application);
 
     res.status(200).json({ message: 'Student application rejected', application });
   } catch (err) {
@@ -808,6 +888,7 @@ stdRouter.put("/:name", async (req, res) => {
       });
     }
 
+    await upsertStudentBackup(student);
     res.status(200).json(student);
   } catch (err) {
     console.error('Error updating student:', err);
@@ -848,7 +929,15 @@ stdRouter.delete("/", async (req, res) => {
       Feedback.deleteMany({ studentId: studentObjectId }),
       Counseling.deleteMany({ studentId: studentObjectId }),
       Notification.deleteMany({ studentId: studentObjectId }),
-      User.deleteMany({ studentId: studentObjectId })
+      User.deleteMany({ studentId: studentObjectId }),
+      removeStudentBackup(studentObjectId),
+      // remove associated backup records for related documents
+      removeBackupRecord(GradeBackup, 'serviceGradeId', studentObjectId),
+      removeBackupRecord(AttendanceBackup, 'serviceAttendanceId', studentObjectId),
+      removeBackupRecord(FeedbackBackup, 'serviceFeedbackId', studentObjectId),
+      removeBackupRecord(CounselingBackup, 'serviceCounselingId', studentObjectId),
+      removeBackupRecord(NotificationBackup, 'serviceNotificationId', studentObjectId),
+      removeBackupRecord(UserBackup, 'serviceUserId', studentObjectId)
     ]);
 
     res.status(200).json({ 
@@ -921,7 +1010,7 @@ stdRouter.post("/grades", async (req, res) => {
     );
 
     const notificationMessage = `${student.name} 학생의 ${subjectValidation.value} ${yearValidation.value}학기 ${termValidation.value}차 성적이 ${scoreValidation.value}점으로 등록되었습니다.`;
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: new mongoose.Types.ObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
@@ -934,7 +1023,7 @@ stdRouter.post("/grades", async (req, res) => {
         term: termValidation.value 
       }
     });
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: new mongoose.Types.ObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
@@ -946,6 +1035,7 @@ stdRouter.post("/grades", async (req, res) => {
         term: termValidation.value 
       }
     });
+    await upsertBackupRecord(GradeBackup, 'serviceGradeId', grade);
 
     res.status(200).json({ 
       message: 'Grade added successfully',
@@ -989,6 +1079,8 @@ stdRouter.post("/attendances", async (req, res) => {
       { status: statusValidation.value, date: normalizedDate },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
+
+    await upsertBackupRecord(AttendanceBackup, 'serviceAttendanceId', attendance);
 
     res.status(200).json({ 
       message: 'Attendance updated successfully',
@@ -1047,9 +1139,10 @@ stdRouter.post("/:studentId/counselings", async (req, res) => {
       dateTime,
       status: 'pending'
     });
+    await upsertBackupRecord(CounselingBackup, 'serviceCounselingId', counseling);
 
     const notificationMessage = `${student.name} 학생이 ${dateValidation.value.toLocaleDateString('ko-KR')} ${timeValidation.value} 상담을 신청했습니다.`;
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: convertToObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
@@ -1057,7 +1150,7 @@ stdRouter.post("/:studentId/counselings", async (req, res) => {
       type: 'counseling',
       relatedData: { counselingId: counseling._id }
     });
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: convertToObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
@@ -1120,12 +1213,13 @@ stdRouter.put("/counselings/:counselingId/status", async (req, res) => {
     counseling.status = statusValidation.value;
     counseling.rejectionReason = statusValidation.value === 'rejected' ? (rejectionReason ? rejectionReason.toString().trim() : '') : '';
     await counseling.save();
+    await upsertBackupRecord(CounselingBackup, 'serviceCounselingId', counseling);
 
     const notificationMessage = statusValidation.value === 'accepted'
       ? `${counseling.studentName} 학생의 상담이 ${new Date(counseling.dateTime).toLocaleDateString('ko-KR')} ${new Date(counseling.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}에 확정되었습니다.`
       : `${counseling.studentName} 학생의 상담 신청이 반려되었습니다. 사유: ${counseling.rejectionReason}`;
 
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: counseling.studentId,
       recipientType: 'student',
       recipientName: counseling.studentName,
@@ -1133,7 +1227,7 @@ stdRouter.put("/counselings/:counselingId/status", async (req, res) => {
       type: 'counseling',
       relatedData: { counselingId: counseling._id }
     });
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: counseling.studentId,
       recipientType: 'parent',
       message: notificationMessage,
@@ -1174,9 +1268,10 @@ stdRouter.put("/counselings/:counselingId/notes", async (req, res) => {
 
     counseling.teacherNotes = notesValidation.value;
     await counseling.save();
+    await upsertBackupRecord(CounselingBackup, 'serviceCounselingId', counseling);
 
     const notificationMessage = `${counseling.studentName} 학생의 상담 내용이 교사에 의해 업데이트되었습니다.`;
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: counseling.studentId,
       recipientType: 'student',
       recipientName: counseling.studentName,
@@ -1184,7 +1279,7 @@ stdRouter.put("/counselings/:counselingId/notes", async (req, res) => {
       type: 'counseling',
       relatedData: { counselingId: counseling._id }
     });
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: counseling.studentId,
       recipientType: 'parent',
       message: notificationMessage,
@@ -1226,6 +1321,7 @@ stdRouter.post("/subjects", async (req, res) => {
     }
     
     const subject = await Subject.create({ name: nameValidation.value });
+    await upsertBackupRecord(SubjectBackup, 'serviceSubjectId', subject);
     res.status(201).json(subject);
   } catch (err) {
     console.error('Error creating subject:', err);
@@ -1247,6 +1343,7 @@ stdRouter.delete("/subjects/:name", async (req, res) => {
     if (!subject) {
       return res.status(404).json({ message: 'Subject not found' });
     }
+    await removeBackupRecord(SubjectBackup, 'serviceSubjectId', subject._id);
     res.status(200).json({ message: 'Subject deleted successfully' });
   } catch (err) {
     console.error('Error deleting subject:', err);
@@ -1405,6 +1502,7 @@ stdRouter.post("/auth/kakao", async (req, res) => {
         studentId: validatedStudentId,
         lastLoginAt: new Date(),
       });
+      await upsertBackupRecord(UserBackup, 'serviceUserId', user);
     } else {
       user.username = usernameValidation.value;
       user.email = emailValidation.value || user.email;
@@ -1413,6 +1511,7 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       user.studentId = validatedStudentId || user.studentId;
       user.lastLoginAt = new Date();
       await user.save();
+      await upsertBackupRecord(UserBackup, 'serviceUserId', user);
     }
 
     const userData = {
@@ -1489,6 +1588,7 @@ stdRouter.post("/register-user", async (req, res) => {
     });
 
     const newUser = await user.save();
+    await upsertBackupRecord(UserBackup, 'serviceUserId', newUser);
     res.status(201).json({ message: 'User registered successfully', user: newUser });
   } catch (err) {
     console.error('User registration error:', err);
@@ -1596,9 +1696,10 @@ stdRouter.post("/feedbacks", async (req, res) => {
     });
 
     const newFeedback = await feedback.save();
+    await upsertBackupRecord(FeedbackBackup, 'serviceFeedbackId', newFeedback);
 
     const notificationMessage = `${student.name} 학생에 대한 새로운 피드백이 등록되었습니다.`;
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: convertToObjectId(studentId),
       recipientType: 'student',
       recipientName: student.name,
@@ -1606,7 +1707,7 @@ stdRouter.post("/feedbacks", async (req, res) => {
       type: 'feedback',
       relatedData: { teacherName: teacherNameValidation.value, feedbackId: newFeedback._id }
     });
-    await Notification.create({
+    await createNotificationWithBackup({
       studentId: convertToObjectId(studentId),
       recipientType: 'parent',
       message: notificationMessage,
@@ -1655,6 +1756,8 @@ stdRouter.post("/notifications/mark-all-read", async (req, res) => {
     }
 
     await Notification.updateMany(validation.filter, { read: true });
+    const updatedNotifications = await Notification.find(validation.filter);
+    await backupMultipleNotifications(updatedNotifications);
     res.status(200).json({ message: 'Notifications marked read' });
   } catch (err) {
     console.error('Error marking notifications read:', err);
