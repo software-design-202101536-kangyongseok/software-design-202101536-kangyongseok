@@ -36,9 +36,8 @@ const studentApplicationSchema = new mongoose.Schema({
   }
 });
 
-studentApplicationSchema.pre('save', function (next) {
+studentApplicationSchema.pre('save', function () {
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = mongoose.model('StudentApplication', studentApplicationSchema);

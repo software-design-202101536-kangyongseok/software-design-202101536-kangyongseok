@@ -84,9 +84,14 @@ function Login({ onLogin }) {
             }
           }
 
-          const result = window.Kakao.Auth.login(callback)
-          if (result && typeof result.then === 'function') {
-            result.then(resolve).catch(reject)
+          try {
+            const result = window.Kakao.Auth.login(callback)
+            if (result && typeof result.then === 'function') {
+              result.then(resolve).catch(reject)
+            }
+          } catch (err) {
+            // If the SDK throws synchronously, surface it to the promise
+            reject(err)
           }
         })
 
