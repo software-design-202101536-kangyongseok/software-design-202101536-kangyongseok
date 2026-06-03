@@ -76,7 +76,7 @@ function Login({ onLogin }) {
       try {
         const authObj = await new Promise((resolve, reject) => {
           const callback = {
-            scope: 'profile_nickname, account_email, gender',
+            scope: 'profile_nickname',
             success: (authResult) => {
               resolve(authResult)
             },
@@ -120,8 +120,6 @@ function Login({ onLogin }) {
           || profileData.kakao_account?.profile?.nickname
           || profileData.kakao_account?.profile?.displayName
           || '카카오 사용자'
-        const email = kakaoAccount.email || ''
-        const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
 
         const linkedStudent = students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
 
@@ -137,27 +135,14 @@ function Login({ onLogin }) {
           }
         }
 
+        // Send only required info: kakaoId and nickname (username/name).
+        // Exclude email, gender, birthDate, profileImage per requirement.
         const payload = {
           kakaoId,
           username: realName,
           name: realName,
-          email,
-          profileImage,
           userType: mode === 'apply' ? 'student' : userType,
-          studentId: mode === 'login' && (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined,
-          birthDate: (() => {
-            const birthday = kakaoAccount.birthday || ''
-            const birthyear = kakaoAccount.birthyear || ''
-            if (birthyear && birthday && birthday.length === 4) {
-              const month = birthday.slice(0, 2)
-              const day = birthday.slice(2, 4)
-              if (/^(0[1-9]|1[0-2])$/.test(month) && /^(0[1-9]|[12][0-9]|3[01])$/.test(day)) {
-                return `${birthyear}-${month}-${day}`
-              }
-            }
-            return ''
-          })(),
-          gender: kakaoAccount.gender || ''
+          studentId: mode === 'login' && (userType === 'student' || userType === 'parent') ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
         }
 
         const endpoint = mode === 'apply' ? `${API_URL}/students/applications` : `${API_URL}/students/auth/kakao`
