@@ -696,8 +696,8 @@ stdRouter.put("/applications/:id/approve", async (req, res) => {
 
     const studentData = {
       name: application.name,
-      birthDate: application.birthDate,
-      gender: application.gender,
+      birthDate: resolvedBirthDate,
+      gender: resolvedGender,
       subject: ['미정'],
       bio: '학생 등록 신청을 통해 생성된 기본 정보입니다.',
       kakaoId: application.kakaoId,
@@ -709,6 +709,8 @@ stdRouter.put("/applications/:id/approve", async (req, res) => {
 
     application.status = 'accepted';
     application.reviewedAt = new Date();
+    application.birthDate = resolvedBirthDate;
+    application.gender = resolvedGender;
     await application.save();
 
     res.status(200).json({ message: 'Student application approved', student, application });
