@@ -114,7 +114,7 @@ function Login({ onLogin }) {
         const profileData = await profileResponse.json()
         const kakaoId = String(profileData.id)
         const kakaoAccount = profileData.kakao_account || {}
-        const nickname = profileData.properties?.nickname || kakaoAccount.profile?.nickname || '카카오 사용자'
+        const realName = kakaoAccount.profile?.nickname || profileData.properties?.nickname || '카카오 사용자'
         const email = kakaoAccount.email || ''
         const profileImage = profileData.properties?.profile_image || kakaoAccount.profile?.profile_image_url || ''
 
@@ -134,8 +134,8 @@ function Login({ onLogin }) {
 
         const payload = {
           kakaoId,
-          username: nickname,
-          name: nickname,
+          username: realName,
+          name: realName,
           email,
           profileImage,
           userType: mode === 'apply' ? 'student' : userType,
