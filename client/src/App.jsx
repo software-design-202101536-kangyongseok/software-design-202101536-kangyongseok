@@ -1734,19 +1734,25 @@ function App() {
       </div>
       <nav style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
         <button 
-          onClick={() => setActiveTab('search')}
+          onClick={() => {
+            if ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) {
+              setShowStudentModal(true)
+            } else {
+              setActiveTab('search')
+            }
+          }}
           style={{ 
             padding: '10px 20px',
             border: 'none',
-            backgroundColor: activeTab === 'search' ? '#2196F3' : '#f0f0f0',
-            color: activeTab === 'search' ? 'white' : '#333',
+            backgroundColor: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? '#2196F3' : '#f0f0f0',
+            color: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'white' : '#333',
             borderRadius: '4px',
             cursor: 'pointer',
             fontSize: '16px',
-            fontWeight: activeTab === 'search' ? 'bold' : 'normal'
+            fontWeight: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'bold' : 'normal'
           }}
         >
-          학생 검색
+          {(user.userType === 'student' || user.userType === 'parent') && !showStudentModal ? '학생 정보' : '학생 검색'}
         </button>
         {(user.userType === 'student' || user.userType === 'parent') && (
           <button 
