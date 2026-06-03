@@ -709,7 +709,8 @@ stdRouter.post("/applications", async (req, res) => {
 
 stdRouter.get("/applications", async (req, res) => {
   try {
-    const applications = await StudentApplication.find({}).sort({ createdAt: -1 });
+    // Return only pending applications so approved/rejected ones disappear from the teacher list
+    const applications = await StudentApplication.find({ status: 'pending' }).sort({ createdAt: -1 });
     res.status(200).json(applications);
   } catch (err) {
     console.error('Error fetching student applications:', err);
