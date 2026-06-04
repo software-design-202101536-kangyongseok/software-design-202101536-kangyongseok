@@ -295,7 +295,7 @@ function Login({ onLogin }) {
           <p><strong>교사:</strong> 모든 학생 정보 조회 및 관리 가능</p>
           <p><strong>학생:</strong> 카카오 로그인으로 본인 정보를 확인하고 조회 가능합니다</p>
           <p><strong>학부모:</strong> 연결된 자녀 정보만 조회 가능</p>
-          <p><strong>관리자:</strong> 시스템 전체를 관리할 수 있는 관리자 권한입니다. 최초 관리자 등록은 버튼을 눌러 카카오 인증으로 진행합니다.</p>
+          <p><strong>관리자:</strong> 관리자 계정입니다.</p>
         </div>
       </div>
     </div>

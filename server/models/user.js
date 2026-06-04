@@ -26,6 +26,11 @@ const userSchema = new mongoose.Schema({
     enum: ['teacher', 'student', 'parent', 'admin'],
     required: true,
   },
+  // 관리자 여부 (teacher/student/parent 계정에 겸임 가능)
+  isAdmin: {
+    type: Boolean,
+    default: false,
+  },
   // 학생이나 학부모의 경우 연결된 학생 ID
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
