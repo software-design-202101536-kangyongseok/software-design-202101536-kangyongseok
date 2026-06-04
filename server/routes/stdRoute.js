@@ -1477,9 +1477,15 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       return res.status(400).json({ message: `Username: ${usernameValidation.error}` });
     }
 
-    const userTypeValidation = validateEnum(userType, ['student', 'teacher', 'parent']);
+    const userTypeValidation = validateEnum(userType, ['student', 'teacher', 'parent', 'admin']);
     if (!userTypeValidation.valid) {
       return res.status(400).json({ message: userTypeValidation.error });
+    }
+
+    const isAdmin = userTypeValidation.value === 'admin';
+    const existingAdmin = await User.findOne({ userType: 'admin' });
+    if (isAdmin && existingAdmin && String(existingAdmin.kakaoId) !== String(kakaoIdValidation.value)) {
+      return res.status(403).json({ message: '관리자 계정은 이미 등록되어 있습니다.' });
     }
 
     let validatedStudentId = null;
@@ -1568,10 +1574,12 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       });
       await upsertBackupRecord(UserBackup, 'serviceUserId', user);
     } else {
+      if (user.userType !== userTypeValidation.value) {
+        return res.status(403).json({ message: '이미 다른 유형으로 등록된 카카오 계정입니다.' });
+      }
       user.username = usernameValidation.value;
       user.email = emailValidation.value || user.email;
       user.profileImage = profileImageValidation.value || user.profileImage;
-      user.userType = userTypeValidation.value;
       user.studentId = validatedStudentId || user.studentId;
       user.lastLoginAt = new Date();
       await user.save();
@@ -1602,6 +1610,16 @@ stdRouter.post("/auth/kakao", async (req, res) => {
     res.status(200).json({ message: 'Kakao login successful', user: userData });
   } catch (err) {
     console.error('Kakao login error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+stdRouter.get('/admin/exists', async (req, res) => {
+  try {
+    const adminExists = await User.exists({ userType: 'admin' });
+    res.status(200).json({ exists: !!adminExists });
+  } catch (err) {
+    console.error('Admin exists check failed:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

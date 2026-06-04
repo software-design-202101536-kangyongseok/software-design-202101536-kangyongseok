@@ -8,6 +8,7 @@ function Login({ onLogin }) {
   const [userType, setUserType] = useState('teacher')
   const [students, setStudents] = useState([])
   const [selectedStudent, setSelectedStudent] = useState('')
+  const [adminExists, setAdminExists] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
@@ -31,7 +32,27 @@ function Login({ onLogin }) {
     // 학생 목록 불러오기
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStudents()
+    fetchAdminExists()
   }, [])
+
+  const fetchAdminExists = async () => {
+    try {
+      const response = await fetch(`${API_URL}/students/admin/exists`)
+      if (!response.ok) {
+        throw new Error('Failed to check admin registration status')
+      }
+      const data = await response.json()
+      setAdminExists(data.exists)
+    } catch (err) {
+      console.error('Admin existence check failed:', err)
+    }
+  }
+
+  const handleAdminRegister = async () => {
+    setError('')
+    setSuccessMessage('')
+    await handleKakaoLogin(null, 'admin')
+  }
 
   useEffect(() => {
     if (!window.Kakao) {
@@ -49,13 +70,15 @@ function Login({ onLogin }) {
     }
   }, [])
 
-  const handleKakaoLogin = async (e) => {
+  const handleKakaoLogin = async (e, overrideUserType = null) => {
     if (e && e.preventDefault) {
       e.preventDefault()
     }
 
     setError('')
     setSuccessMessage('')
+
+    const effectiveUserType = overrideUserType || userType
 
     if (!KAKAO_JS_KEY) {
       setError('카카오 JS 키가 설정되어 있지 않습니다.')
@@ -143,8 +166,8 @@ function Login({ onLogin }) {
           kakaoId,
           username: realName,
           name: realName,
-          userType: mode === 'apply' ? 'student' : userType,
-          studentId: mode === 'login' && userType === 'parent' ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
+          userType: mode === 'apply' ? 'student' : effectiveUserType,
+          studentId: mode === 'login' && effectiveUserType === 'parent' ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
         }
 
         const endpoint = mode === 'apply' ? `${API_URL}/students/applications` : `${API_URL}/students/auth/kakao`
@@ -165,6 +188,9 @@ function Login({ onLogin }) {
           setSuccessMessage('학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
           setError('')
         } else {
+          if (effectiveUserType === 'admin') {
+            setAdminExists(true)
+          }
           onLogin(data.user)
         }
 
@@ -217,6 +243,15 @@ function Login({ onLogin }) {
           >
             학생 등록 신청
           </button>
+          {!adminExists && (
+            <button
+              type="button"
+              onClick={handleAdminRegister}
+              style={{ padding: '8px 12px', border: '1px solid #ccc', backgroundColor: '#FF6F00', color: 'white', cursor: 'pointer' }}
+            >
+              관리자 계정 등록
+            </button>
+          )}
         </div>
         <form onSubmit={handleSubmit}>
           {mode === 'login' && (
@@ -226,6 +261,7 @@ function Login({ onLogin }) {
                 <option value="teacher">교사</option>
                 <option value="student">학생</option>
                 <option value="parent">학부모</option>
+                <option value="admin">관리자</option>
               </select>
             </div>
           )}
@@ -260,6 +296,7 @@ function Login({ onLogin }) {
           <p><strong>교사:</strong> 모든 학생 정보 조회 및 관리 가능</p>
           <p><strong>학생:</strong> 카카오 로그인으로 본인 정보를 확인하고 조회 가능합니다</p>
           <p><strong>학부모:</strong> 연결된 자녀 정보만 조회 가능</p>
+          <p><strong>관리자:</strong> 시스템 전체를 관리할 수 있는 관리자 권한입니다. 최초 관리자 등록은 버튼을 눌러 카카오 인증으로 진행합니다.</p>
         </div>
       </div>
     </div>

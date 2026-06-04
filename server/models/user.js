@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
   // 사용자 유형
   userType: {
     type: String,
-    enum: ['teacher', 'student', 'parent'],
+    enum: ['teacher', 'student', 'parent', 'admin'],
     required: true,
   },
   // 학생이나 학부모의 경우 연결된 학생 ID
