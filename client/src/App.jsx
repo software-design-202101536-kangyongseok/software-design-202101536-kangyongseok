@@ -71,7 +71,7 @@ function App() {
   // Student info modal state
   const [showStudentModal, setShowStudentModal] = useState(false)
 
-  const isAdmin = user?.userType === 'admin' || user?.isAdmin
+  const isAdmin = user?.userType === 'admin'
   const isAdminOrTeacher = isAdmin || user?.userType === 'teacher'
   const isViewer = user?.userType === 'student' || user?.userType === 'parent'
 

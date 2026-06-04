@@ -1613,7 +1613,9 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       await upsertBackupRecord(UserBackup, 'serviceUserId', user);
     } else {
       if (user.userType !== userTypeValidation.value && !user.isAdmin) {
-        return res.status(403).json({ message: '이미 다른 유형으로 등록된 카카오 계정입니다.' });
+        if (!(userTypeValidation.value === 'admin' && !existingAdmin)) {
+          return res.status(403).json({ message: '이미 다른 유형으로 등록된 카카오 계정입니다.' });
+        }
       }
       user.username = usernameValidation.value;
       user.email = emailValidation.value || user.email;
