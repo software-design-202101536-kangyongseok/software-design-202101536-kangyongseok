@@ -566,38 +566,43 @@ stdRouter.get("/users/all", async (req, res) => {
   }
 });
 
-stdRouter.get("/all", async (req, res) => {
+// GET /students/all - return all students
+stdRouter.get('/all', async (req, res) => {
   try {
-    // This endpoint expects subject field - if not present, it's not for this route
-    if (!req.body.subject) {
-      return res.status(400).json({ 
-        message: 'Subject field is required for student creation' 
-      });
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('MongoDB not connected - returning empty student list');
+      return res.status(200).json([]);
     }
+    const students = await Student.find({}).lean();
+    res.status(200).json(students);
+  } catch (err) {
+    console.error('Error fetching all students:', err);
+    res.status(500).json({ message: 'Failed to fetch students' });
+  }
+});
 
+// POST /students - create a new student
+stdRouter.post('/', async (req, res) => {
+  try {
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB not connected - cannot create student');
       return res.status(503).json({ message: 'Database not connected' });
     }
+
     const { name, birthDate, gender, subject, bio, kakaoId, parents } = req.body;
-    
+
     // 입력 검증
     const validation = validateStudentData({ name, birthDate, gender, subject, bio });
     if (!validation.valid) {
-      return res.status(400).json({ 
-        message: 'Validation failed', 
-        errors: validation.errors 
-      });
+      return res.status(400).json({ message: 'Validation failed', errors: validation.errors });
     }
-    
+
     // 중복 확인
     const existingStudent = await Student.exists({ name: name.toString().trim() });
     if (existingStudent) {
-      return res.status(400).json({ 
-        message: `Student with name "${name.toString().trim()}" already exists` 
-      });
+      return res.status(400).json({ message: `Student with name "${name.toString().trim()}" already exists` });
     }
-    
+
     const studentData = {
       name: name.toString().trim(),
       birthDate: new Date(birthDate),
@@ -606,30 +611,21 @@ stdRouter.get("/all", async (req, res) => {
       bio: bio.toString().trim(),
     };
 
-    // optional kakaoId for student
     if (kakaoId && typeof kakaoId === 'string' && kakaoId.trim()) {
       studentData.kakaoId = kakaoId.trim();
     }
 
-    // optional parents array
     if (Array.isArray(parents) && parents.length > 0) {
-      studentData.parents = parents.map(p => ({
-        name: p.name || '',
-        kakaoId: p.kakaoId || '',
-        email: p.email || ''
-      }));
+      studentData.parents = parents.map(p => ({ name: p.name || '', kakaoId: p.kakaoId || '', email: p.email || '' }));
     }
 
     const student = new Student(studentData);
-    
     const newStudent = await student.save();
     await upsertStudentBackup(newStudent);
     res.status(201).json(newStudent);
   } catch (err) {
     console.error('Error creating student:', err);
-    res.status(400).json({ 
-      message: err.message || 'Failed to create student' 
-    });
+    res.status(400).json({ message: err.message || 'Failed to create student' });
   }
 });
 
@@ -1600,6 +1596,14 @@ stdRouter.post("/auth/kakao", async (req, res) => {
     const shouldAssignAdmin = !existingAdmin;
     let user = await User.findOne({ kakaoId: kakaoIdValidation.value });
     if (!user) {
+      // Do not auto-create teacher accounts unless an approved application exists
+      if (userTypeValidation.value === 'teacher') {
+        const approvedApplication = await StudentApplication.findOne({ kakaoId: kakaoIdValidation.value, status: 'accepted' });
+        if (!approvedApplication) {
+          return res.status(403).json({ message: 'Teacher account is not approved yet' });
+        }
+      }
+
       user = await User.create({
         kakaoId: kakaoIdValidation.value,
         username: usernameValidation.value,
