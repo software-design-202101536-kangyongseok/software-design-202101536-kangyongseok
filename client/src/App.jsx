@@ -88,7 +88,10 @@ function App() {
   const [allUsers, setAllUsers] = useState([])
   const [allUsersLoading, setAllUsersLoading] = useState(false)
   const [allUsersError, setAllUsersError] = useState('')
-  const [applications, setApplications] = useState([])
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [showUserModal, setShowUserModal] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [applications, setApplications] = useState([])  
   const [applicationsLoading, setApplicationsLoading] = useState(false)
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
   const [approvalFormData, setApprovalFormData] = useState({
@@ -1057,6 +1060,45 @@ function App() {
     } finally {
       setAllUsersLoading(false)
     }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser || !selectedUser._id) {
+      setAllUsersError('Delete target user not found')
+      return
+    }
+
+    if (!window.confirm(`정말로 ${selectedUser.username}(${selectedUser.userType}) 계정을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    setDeleteLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/users/${selectedUser._id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to delete user')
+      }
+
+      setAllUsersError('')
+      setShowUserModal(false)
+      setSelectedUser(null)
+      await fetchAllUsers()
+    } catch (err) {
+      console.error('Error deleting user:', err)
+      setAllUsersError(err.message || 'Failed to delete user')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const handleSelectUser = (userItem) => {
+    setSelectedUser(userItem)
+    setShowUserModal(true)
   }
 
   const fetchApplications = async () => {
@@ -2618,7 +2660,7 @@ function App() {
           ) : allUsers.length > 0 ? (
             <ul style={{ listStyle: 'none', padding: 0, maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
               {allUsers.map(userItem => (
-                <li key={userItem._id} style={{ padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <li key={userItem._id} onClick={() => handleSelectUser(userItem)} style={{ padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', backgroundColor: '#fafafa', transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#efefef'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}>
                   <div>
                     <strong>{userItem.username}</strong>
                     <div style={{ color: '#555' }}>
@@ -2695,6 +2737,23 @@ function App() {
       )}
 
       {error && <p style={{ color: 'red', margin: '10px 0' }}>{error}</p>}
+      {selectedUser && showUserModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '500px', width: '90%', position: 'relative', color: 'black' }}>
+            <button onClick={() => { setShowUserModal(false); setSelectedUser(null); }} style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
+            <h2 style={{ color: 'black', marginBottom: '20px' }}>{selectedUser.username}</h2>
+            <div style={{ marginBottom: '15px' }}>
+              <p><strong>역할:</strong> {selectedUser.userType === 'teacher' ? '교사' : selectedUser.userType === 'student' ? '학생' : selectedUser.userType === 'parent' ? '학부모' : '관리자'}</p>
+              {selectedUser.isAdmin && <p><strong>권한:</strong> 관리자 권한</p>}
+              {selectedUser.email && <p><strong>이메일:</strong> {selectedUser.email}</p>}
+            </div>
+            <div style={{ marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowUserModal(false); setSelectedUser(null); }} style={{ padding: '8px 16px', backgroundColor: '#757575', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>닫기</button>
+              <button onClick={handleDeleteUser} disabled={deleteLoading} style={{ padding: '8px 16px', backgroundColor: deleteLoading ? '#ccc' : '#F44336', color: 'white', border: 'none', borderRadius: '4px', cursor: deleteLoading ? 'not-allowed' : 'pointer' }}>{deleteLoading ? '삭제 중...' : '삭제'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {studentData && showStudentModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
 <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative', color: 'black' }}>
