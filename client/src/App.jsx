@@ -71,6 +71,9 @@ function App() {
   // Student info modal state
   const [showStudentModal, setShowStudentModal] = useState(false)
 
+  const isAdminOrTeacher = user?.userType === 'teacher' || user?.userType === 'admin' || user?.isAdmin
+  const isViewer = user?.userType === 'student' || user?.userType === 'parent'
+
   const defaultSubjects = ['국어', '영어', '수학', '사회', '과학']
 
   // Sorting state
@@ -242,7 +245,7 @@ function App() {
     if (!user) return
     try {
       let response
-      if (user.userType === 'teacher' || user.userType === 'admin') {
+      if (isAdminOrTeacher) {
         response = await fetch(`${API_URL}/students/teacher/counselings`)
       } else {
         const studentId = user.studentId || studentData?.studentId
@@ -516,7 +519,7 @@ function App() {
     }
     fetchSubjects() // Always fetch subjects for register/edit
 
-    if (activeTab === 'register' && (user.userType === 'teacher' || user.userType === 'admin')) {
+    if (activeTab === 'register' && isAdminOrTeacher) {
       fetchApplications()
     }
 
@@ -1685,7 +1688,7 @@ function App() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ textAlign: 'center', color: '#333' }}>Student Management System</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ marginRight: '10px' }}>환영합니다, {user.username} ({user.userType === 'teacher' || user.userType === 'admin' ? '교사/관리자' : user.userType === 'student' ? '학생' : '학부모'})</span>
+          <span style={{ marginRight: '10px' }}>환영합니다, {user.username} ({isAdminOrTeacher ? '교사/관리자' : user.userType === 'student' ? '학생' : '학부모'})</span>
           {user.userType === 'student' && (
             <button
               onClick={handleRegisterParentKakao}
@@ -1771,7 +1774,7 @@ function App() {
             피드백 보기
           </button>
         )}
-        {(user.userType === 'teacher' || user.userType === 'admin') && (
+        {isAdminOrTeacher && (
           <button 
             onClick={() => setActiveTab('register')}
             style={{ 
@@ -1805,7 +1808,7 @@ function App() {
             상담
           </button>
         )}
-        {(user.userType === 'teacher' || user.userType === 'admin') && (
+        {isAdminOrTeacher && (
           <button 
             onClick={() => setActiveTab('settings')}
             style={{ 
@@ -2257,7 +2260,7 @@ function App() {
 
       {activeTab === 'register' && (
         <section style={{ maxWidth: '700px' }}>
-          {(user.userType === 'teacher' || user.userType === 'admin') && (
+          {isAdminOrTeacher && (
             <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
               <h2 style={{ marginTop: 0 }}>학생 등록 신청 관리</h2>
               {applicationsLoading ? (
@@ -2573,7 +2576,7 @@ function App() {
 
   const renderSearchSection = () => (
     <section>
-      {(user.userType === 'teacher' || user.userType === 'admin') && (
+      {isAdminOrTeacher && (
         <div style={{ marginBottom: '15px' }}>
           <input
             type="text"
@@ -2595,7 +2598,7 @@ function App() {
         </div>
       )}
       {/* studentData 여부와 관계없이 항상 표시 */}
-      {(user.userType === 'teacher' || user.userType === 'admin') && !showStudentModal && (
+      {isAdminOrTeacher && !showStudentModal && (
         <div style={{ marginBottom: '20px' }}>
           <h3>전체 학생 목록</h3>
           <button onClick={fetchAllStudents} disabled={allStudentsLoading} style={{ marginBottom: '10px', padding: '5px 10px', backgroundColor: allStudentsLoading ? '#ccc' : '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: allStudentsLoading ? 'not-allowed' : 'pointer' }}>
@@ -2636,7 +2639,7 @@ function App() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
 <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflowY: 'auto', position: 'relative', color: 'black' }}>
             <button onClick={() => setShowStudentModal(false)} aria-label="학생 정보 창 닫기" style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'black' }}>×</button>
-            <h2 style={{ color: 'black' }}>{studentData.username} {(user.userType === 'teacher' || user.userType === 'admin') && <button onClick={openEditModal} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>기본정보 수정</button>}</h2>
+            <h2 style={{ color: 'black' }}>{studentData.username} {isAdminOrTeacher && <button onClick={openEditModal} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>기본정보 수정</button>}</h2>
             <p><strong>생년월일:</strong> {new Date(studentData.birthDate).toLocaleDateString('ko-KR')}</p>
             <p><strong>성별:</strong> {studentData.gender === 'male' ? '남성' : '여성'}</p>
             <p><strong>과목:</strong> {studentData.subjects.join(', ')}</p>
@@ -2659,7 +2662,7 @@ function App() {
                 </div>
               </div>
             </div>
-            <h3>출석 {(user.userType === 'teacher' || user.userType === 'admin') && <button onClick={() => setShowAttendanceModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>출석 입력</button>}</h3>
+            <h3>출석 {isAdminOrTeacher && <button onClick={() => setShowAttendanceModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>출석 입력</button>}</h3>
             <p>Present: {studentData.presentCount}, Absent: {studentData.absentCount}, Attendance Rate: {studentData.presentCount + studentData.absentCount > 0 ? ((studentData.presentCount / (studentData.presentCount + studentData.absentCount)) * 100).toFixed(1) : 0}%</p>
             {studentData.absentDates.length > 0 && (
               <div>
@@ -2671,7 +2674,7 @@ function App() {
                 </ul>
               </div>
             )}
-            <h3>성적 {(user.userType === 'teacher' || user.userType === 'admin') && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
+            <h3>성적 {isAdminOrTeacher && <><button onClick={() => setShowGradeModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>성적 입력</button> <button onClick={() => setShowGradeScaleModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>등급 기준 변경</button></>}</h3>
             {studentData.grades.length > 0 && (
               <div style={{ marginTop: '15px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8fbff' }}>
                 <h4 style={{ margin: '0 0 10px 0' }}>학기별 성적 레이더 차트</h4>
@@ -2771,7 +2774,7 @@ function App() {
             {studentData.subjectAverage && (
               <p><strong>Subject Average:</strong> {studentData.subjectAverage}</p>
             )}
-            <h3>교사 피드백 {(user.userType === 'teacher' || user.userType === 'admin') && studentData &&<button onClick={() => setShowFeedbackModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#673AB7', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>피드백 작성</button>}</h3>
+            <h3>교사 피드백 {isAdminOrTeacher && studentData &&<button onClick={() => setShowFeedbackModal(true)} style={{ marginLeft: '10px', padding: '5px 10px', backgroundColor: '#673AB7', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>피드백 작성</button>}</h3>
             {studentFeedbacks.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {studentFeedbacks.map((feedback, index) => (

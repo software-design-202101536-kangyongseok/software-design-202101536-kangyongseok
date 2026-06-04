@@ -1482,9 +1482,9 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       return res.status(400).json({ message: userTypeValidation.error });
     }
 
-    const isAdmin = userTypeValidation.value === 'admin';
-    const existingAdmin = await User.findOne({ userType: 'admin' });
-    if (isAdmin && existingAdmin && String(existingAdmin.kakaoId) !== String(kakaoIdValidation.value)) {
+    const existingAdmin = await User.findOne({ $or: [{ isAdmin: true }, { userType: 'admin' }] });
+    const isAdminRequest = userTypeValidation.value === 'admin';
+    if (isAdminRequest && existingAdmin && String(existingAdmin.kakaoId) !== String(kakaoIdValidation.value)) {
       return res.status(403).json({ message: '관리자 계정은 이미 등록되어 있습니다.' });
     }
 
@@ -1561,6 +1561,7 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       }
     }
 
+    const shouldAssignAdmin = !existingAdmin;
     let user = await User.findOne({ kakaoId: kakaoIdValidation.value });
     if (!user) {
       user = await User.create({
@@ -1569,17 +1570,22 @@ stdRouter.post("/auth/kakao", async (req, res) => {
         email: emailValidation.value || undefined,
         profileImage: profileImageValidation.value || undefined,
         userType: userTypeValidation.value,
+        isAdmin: shouldAssignAdmin || isAdminRequest,
         studentId: validatedStudentId,
         lastLoginAt: new Date(),
       });
       await upsertBackupRecord(UserBackup, 'serviceUserId', user);
     } else {
-      if (user.userType !== userTypeValidation.value) {
+      if (user.userType !== userTypeValidation.value && !user.isAdmin) {
         return res.status(403).json({ message: '이미 다른 유형으로 등록된 카카오 계정입니다.' });
       }
       user.username = usernameValidation.value;
       user.email = emailValidation.value || user.email;
       user.profileImage = profileImageValidation.value || user.profileImage;
+      user.userType = userTypeValidation.value;
+      if (!user.isAdmin && shouldAssignAdmin) {
+        user.isAdmin = true;
+      }
       user.studentId = validatedStudentId || user.studentId;
       user.lastLoginAt = new Date();
       await user.save();
@@ -1592,6 +1598,7 @@ stdRouter.post("/auth/kakao", async (req, res) => {
       studentId: user.studentId,
       email: user.email,
       profileImage: user.profileImage,
+      isAdmin: user.isAdmin || false,
     };
 
     // If user is student or parent and has linked studentId, return studentName as username for compatibility
@@ -1616,7 +1623,7 @@ stdRouter.post("/auth/kakao", async (req, res) => {
 
 stdRouter.get('/admin/exists', async (req, res) => {
   try {
-    const adminExists = await User.exists({ userType: 'admin' });
+    const adminExists = await User.exists({ $or: [{ isAdmin: true }, { userType: 'admin' }] });
     res.status(200).json({ exists: !!adminExists });
   } catch (err) {
     console.error('Admin exists check failed:', err);

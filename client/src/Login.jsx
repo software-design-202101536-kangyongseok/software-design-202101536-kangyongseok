@@ -51,7 +51,7 @@ function Login({ onLogin }) {
   const handleAdminRegister = async () => {
     setError('')
     setSuccessMessage('')
-    await handleKakaoLogin(null, 'admin')
+    await handleKakaoLogin(null, userType)
   }
 
   useEffect(() => {
@@ -144,17 +144,17 @@ function Login({ onLogin }) {
           || profileData.kakao_account?.profile?.displayName
           || '카카오 사용자'
 
-        const linkedStudent = userType === 'parent'
+        const linkedStudent = effectiveUserType === 'parent'
           ? students.find(s => s._id === selectedStudent || s.studentId === selectedStudent || s.name === selectedStudent)
           : null
 
         if (mode === 'login') {
-          if (userType === 'parent' && !selectedStudent) {
+          if (effectiveUserType === 'parent' && !selectedStudent) {
             setError('학생을 선택해주세요.')
             return
           }
 
-          if (userType === 'parent' && !linkedStudent) {
+          if (effectiveUserType === 'parent' && !linkedStudent) {
             setError('선택한 학생이 등록된 학생 목록에 없습니다.')
             return
           }
@@ -188,7 +188,7 @@ function Login({ onLogin }) {
           setSuccessMessage('학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
           setError('')
         } else {
-          if (effectiveUserType === 'admin') {
+          if (data.user?.isAdmin) {
             setAdminExists(true)
           }
           onLogin(data.user)
@@ -261,7 +261,6 @@ function Login({ onLogin }) {
                 <option value="teacher">교사</option>
                 <option value="student">학생</option>
                 <option value="parent">학부모</option>
-                <option value="admin">관리자</option>
               </select>
             </div>
           )}
