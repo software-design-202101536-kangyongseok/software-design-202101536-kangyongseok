@@ -541,36 +541,32 @@ stdRouter.get("/by-id/:id", async (req, res) => {
   }
 });
 
-stdRouter.get("/all", async (req, res) => {
+stdRouter.get("/users/all", async (req, res) => {
   try {
-    // If MongoDB isn't connected, return an empty list so the client
-    // (e.g. teacher UI) doesn't break with a 500 during development.
     if (mongoose.connection.readyState !== 1) {
-      console.warn('MongoDB not connected - returning empty students list');
+      console.warn('MongoDB not connected - returning empty user list');
       return res.status(200).json([]);
     }
 
-    const students = await Student.find({}, 'name subject');
-    const allGrades = await Grade.find({});
+    const users = await User.find({}, 'username userType isAdmin studentId email profileImage').lean();
+    const usersForClient = users.map(user => ({
+      _id: user._id,
+      username: user.username,
+      userType: user.userType,
+      isAdmin: user.isAdmin || false,
+      studentId: user.studentId,
+      email: user.email,
+      profileImage: user.profileImage
+    }));
 
-    const studentsWithGrades = students.map(student => {
-      const studentGrades = allGrades.filter(grade => grade.student.toString() === student._id.toString());
-      return {
-        _id: student._id,
-        name: student.name,
-        subject: student.subject,
-        grades: studentGrades
-      };
-    });
-
-    res.status(200).json(studentsWithGrades);
+    res.status(200).json(usersForClient);
   } catch (err) {
-    console.error('Error fetching all students:', err);
-    res.status(500).json({ message: 'Failed to fetch students' });
+    console.error('Error fetching all users:', err);
+    res.status(500).json({ message: 'Failed to fetch users' });
   }
 });
 
-stdRouter.post("/", async (req, res) => {
+stdRouter.get("/all", async (req, res) => {
   try {
     // This endpoint expects subject field - if not present, it's not for this route
     if (!req.body.subject) {
@@ -642,7 +638,7 @@ stdRouter.post("/applications", async (req, res) => {
     console.log('=== POST /applications received ===');
     console.log('Body:', req.body);
     
-    const { kakaoId, name, birthDate, gender, email, profileImage } = req.body;
+    const { kakaoId, name, birthDate, gender, email, profileImage, userType } = req.body;
 
     const kakaoIdValidation = validateString(kakaoId || '', 1, 200);
     if (!kakaoIdValidation.valid) {
@@ -652,6 +648,11 @@ stdRouter.post("/applications", async (req, res) => {
     const nameValidation = validateString(name || '', 2, 100);
     if (!nameValidation.valid) {
       return res.status(400).json({ message: `Name: ${nameValidation.error}` });
+    }
+
+    const userTypeValidation = validateEnum(userType || 'student', ['student', 'teacher']);
+    if (!userTypeValidation.valid) {
+      return res.status(400).json({ message: userTypeValidation.error });
     }
 
     let birthDateValidated = undefined;
@@ -673,19 +674,28 @@ stdRouter.post("/applications", async (req, res) => {
       return res.status(400).json({ message: `Email: ${emailValidation.error}` });
     }
 
-    const existingStudent = await Student.findOne({ kakaoId: kakaoIdValidation.value });
-    if (existingStudent) {
-      return res.status(400).json({ message: 'A student account is already linked to this Kakao ID' });
+    if (userTypeValidation.value === 'student') {
+      const existingStudent = await Student.findOne({ kakaoId: kakaoIdValidation.value });
+      if (existingStudent) {
+        return res.status(400).json({ message: 'A student account is already linked to this Kakao ID' });
+      }
+    } else {
+      const existingUser = await User.findOne({ kakaoId: kakaoIdValidation.value });
+      if (existingUser) {
+        return res.status(400).json({ message: 'A teacher account is already linked to this Kakao ID' });
+      }
     }
 
-    const existingStudentByName = await Student.findOne({ name: nameValidation.value });
-    if (existingStudentByName) {
-      return res.status(400).json({ message: 'A student with this name is already registered' });
+    const existingNameRecord = userTypeValidation.value === 'student'
+      ? await Student.findOne({ name: nameValidation.value })
+      : await User.findOne({ username: nameValidation.value });
+    if (existingNameRecord) {
+      return res.status(400).json({ message: `${userTypeValidation.value === 'student' ? 'A student' : 'A teacher'} with this name is already registered` });
     }
 
     const existingApplication = await StudentApplication.findOne({ kakaoId: kakaoIdValidation.value, status: 'pending' });
     if (existingApplication) {
-      return res.status(400).json({ message: 'A student registration application is already pending for this Kakao account' });
+      return res.status(400).json({ message: 'A registration application is already pending for this Kakao account' });
     }
 
     const application = await StudentApplication.create({
@@ -695,15 +705,16 @@ stdRouter.post("/applications", async (req, res) => {
       gender: genderValidation.value,
       email: emailValidation.value || undefined,
       profileImage: profileImage ? profileImage.toString().trim() : undefined,
+      userType: userTypeValidation.value,
     });
 
     await upsertBackupRecord(StudentApplicationBackup, 'serviceApplicationId', application);
 
-    res.status(201).json({ message: 'Student registration application created', application });
+    res.status(201).json({ message: `${userTypeValidation.value === 'student' ? 'Student' : 'Teacher'} registration application created`, application });
   } catch (err) {
-    console.error('Error creating student application:', err);
+    console.error('Error creating registration application:', err);
     console.error('Error stack:', err.stack);
-    res.status(400).json({ message: err.message || 'Failed to create student application' });
+    res.status(400).json({ message: err.message || 'Failed to create registration application' });
   }
 });
 
@@ -770,6 +781,31 @@ stdRouter.put("/applications/:id/approve", async (req, res) => {
     const existingNameStudent = await Student.findOne({ name: application.name });
     if (existingNameStudent) {
       return res.status(400).json({ message: 'A student with this name already exists. Please update the existing student record or use a different name.' });
+    }
+
+    if (application.userType === 'teacher') {
+      const existingUser = await User.findOne({ kakaoId: application.kakaoId });
+      if (existingUser) {
+        return res.status(400).json({ message: 'A teacher account is already linked to this Kakao ID' });
+      }
+
+      const user = await User.create({
+        kakaoId: application.kakaoId,
+        username: application.name,
+        email: application.email || undefined,
+        profileImage: application.profileImage || undefined,
+        userType: 'teacher',
+        isAdmin: false,
+        lastLoginAt: new Date(),
+      });
+      await upsertBackupRecord(UserBackup, 'serviceUserId', user);
+
+      application.status = 'accepted';
+      application.reviewedAt = new Date();
+      await application.save();
+      await upsertBackupRecord(StudentApplicationBackup, 'serviceApplicationId', application);
+
+      return res.status(200).json({ message: 'Teacher application approved', user, application });
     }
 
     const studentData = {

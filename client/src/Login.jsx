@@ -6,6 +6,7 @@ const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY || ''
 function Login({ onLogin }) {
   const [mode, setMode] = useState('login')
   const [userType, setUserType] = useState('teacher')
+  const [applicationType, setApplicationType] = useState('student')
   const [students, setStudents] = useState([])
   const [selectedStudent, setSelectedStudent] = useState('')
   const [adminExists, setAdminExists] = useState(false)
@@ -166,7 +167,7 @@ function Login({ onLogin }) {
           kakaoId,
           username: realName,
           name: realName,
-          userType: mode === 'apply' ? 'student' : effectiveUserType,
+          userType: mode === 'apply' ? applicationType : effectiveUserType,
           studentId: mode === 'login' && effectiveUserType === 'parent' ? (linkedStudent?._id || linkedStudent?.studentId) : undefined
         }
 
@@ -185,7 +186,9 @@ function Login({ onLogin }) {
         const data = await response.json()
 
         if (mode === 'apply') {
-          setSuccessMessage('학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
+          setSuccessMessage(applicationType === 'teacher'
+            ? '교사 등록 신청이 제출되었습니다. 관리자의 승인을 기다려주세요.'
+            : '학생 등록 신청이 제출되었습니다. 교사의 승인을 기다려주세요.')
           setError('')
         } else {
           if (data.user?.isAdmin) {
@@ -217,12 +220,13 @@ function Login({ onLogin }) {
   return (
     <div className="login-container">
       <div className="login-form">
-        <h2>{mode === 'apply' ? '학생 등록 신청' : '로그인'}</h2>
+        <h2>{mode === 'apply' ? (applicationType === 'teacher' ? '교사 등록 신청' : '학생 등록 신청') : '로그인'}</h2>
         <div className="form-group" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
           <button
             type="button"
             onClick={() => {
               setMode('login')
+              setApplicationType('student')
               setUserType('teacher')
               setSuccessMessage('')
               setError('')
@@ -235,15 +239,26 @@ function Login({ onLogin }) {
             type="button"
             onClick={() => {
               setMode('apply')
-              setUserType('student')
+              setApplicationType('student')
               setSuccessMessage('')
               setError('')
             }}
-            style={{ padding: '8px 12px', border: '1px solid #ccc', backgroundColor: mode === 'apply' ? '#1976D2' : 'white', color: mode === 'apply' ? 'white' : '#333', cursor: 'pointer' }}
           >
             학생 등록 신청
           </button>
-          {!adminExists && (
+          <button
+            type="button"
+            onClick={() => {
+              setMode('apply')
+              setApplicationType('teacher')
+              setSuccessMessage('')
+              setError('')
+            }}
+            style={{ padding: '8px 12px', border: '1px solid #ccc', backgroundColor: mode === 'apply' && applicationType === 'teacher' ? '#1976D2' : 'white', color: mode === 'apply' && applicationType === 'teacher' ? 'white' : '#333', cursor: 'pointer' }}
+          >
+            교사 등록 신청
+          </button>
+          {mode === 'login' && !adminExists && (
             <button
               type="button"
               onClick={handleAdminRegister}
@@ -265,6 +280,14 @@ function Login({ onLogin }) {
             </div>
           )}
 
+          {mode === 'apply' && (
+            <div className="form-group" style={{ color: '#555', fontSize: '14px' }}>
+              {applicationType === 'teacher'
+                ? '카카오 로그인으로 교사 정보를 가져와 등록 신청서를 자동 생성합니다. 관리자의 승인을 기다려주세요.'
+                : '카카오 로그인으로 학생 정보를 가져와 등록 신청서를 자동 생성합니다. 교사가 승인을 하면 학생 목록에 추가됩니다.'}
+            </div>
+          )}
+
           {mode === 'login' && userType === 'parent' && (
             <div className="form-group">
               <label>학생 선택:</label>
@@ -278,12 +301,6 @@ function Login({ onLogin }) {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
-
-          {mode === 'apply' && (
-            <div className="form-group" style={{ color: '#555', fontSize: '14px' }}>
-              카카오 로그인으로 학생 정보를 가져와 등록 신청서를 자동 생성합니다. 교사가 승인을 하면 학생 목록에 추가됩니다.
             </div>
           )}
 

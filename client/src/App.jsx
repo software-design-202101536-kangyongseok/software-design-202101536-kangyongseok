@@ -71,7 +71,8 @@ function App() {
   // Student info modal state
   const [showStudentModal, setShowStudentModal] = useState(false)
 
-  const isAdminOrTeacher = user?.userType === 'teacher' || user?.userType === 'admin' || user?.isAdmin
+  const isAdmin = user?.userType === 'admin' || user?.isAdmin
+  const isAdminOrTeacher = isAdmin || user?.userType === 'teacher'
   const isViewer = user?.userType === 'student' || user?.userType === 'parent'
 
   const defaultSubjects = ['국어', '영어', '수학', '사회', '과학']
@@ -84,6 +85,9 @@ function App() {
   const [allStudents, setAllStudents] = useState([])
   const [allStudentsLoading, setAllStudentsLoading] = useState(false)
   const [allStudentsError, setAllStudentsError] = useState('')
+  const [allUsers, setAllUsers] = useState([])
+  const [allUsersLoading, setAllUsersLoading] = useState(false)
+  const [allUsersError, setAllUsersError] = useState('')
   const [applications, setApplications] = useState([])
   const [applicationsLoading, setApplicationsLoading] = useState(false)
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
@@ -519,7 +523,7 @@ function App() {
     }
     fetchSubjects() // Always fetch subjects for register/edit
 
-    if (activeTab === 'register' && isAdminOrTeacher) {
+    if (activeTab === 'register' && isAdmin) {
       fetchApplications()
     }
 
@@ -534,6 +538,8 @@ function App() {
           setStudentName(user.studentName)
           fetchStudent(user.studentName, true)
         }
+      } else if (isAdmin) {
+        fetchAllUsers()
       } else {
         fetchAllStudents()
       }
@@ -1030,6 +1036,26 @@ function App() {
     } finally {
       setAllStudentsLoading(false)
 
+    }
+  }
+
+  const fetchAllUsers = async () => {
+    setAllUsersLoading(true)
+    setAllUsersError('')
+    try {
+      const response = await fetch(`${API_URL}/students/users/all`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch all users')
+      }
+      const data = await response.json()
+      setAllUsers(data)
+      setAllUsersError('')
+    } catch (err) {
+      console.error('Error fetching all users:', err)
+      setAllUsersError(err.message || 'Failed to fetch all users')
+      setAllUsers([])
+    } finally {
+      setAllUsersLoading(false)
     }
   }
 
@@ -2260,9 +2286,9 @@ function App() {
 
       {activeTab === 'register' && (
         <section style={{ maxWidth: '700px' }}>
-          {isAdminOrTeacher && (
+          {isAdmin && (
             <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-              <h2 style={{ marginTop: 0 }}>학생 등록 신청 관리</h2>
+              <h2 style={{ marginTop: 0 }}>등록 신청 관리</h2>
               {applicationsLoading ? (
                 <p>등록 신청서를 불러오는 중입니다...</p>
               ) : applications.length === 0 ? (
@@ -2273,7 +2299,7 @@ function App() {
                     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.45)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                       <div style={{ width: '100%', maxWidth: '480px', backgroundColor: '#fff', borderRadius: '10px', padding: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', position: 'relative' }}>
                         <button onClick={closeApprovalModal} aria-label="승인 정보 창 닫기" style={{ position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#333' }}>×</button>
-                        <h2 style={{ marginTop: 0 }}>학생 등록 승인</h2>
+                        <h2 style={{ marginTop: 0 }}>등록 승인</h2>
                         <p style={{ marginBottom: '18px', color: '#555' }}>누락된 정보를 입력한 후 승인을 진행해주세요.</p>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -2307,7 +2333,7 @@ function App() {
                       <div key={app._id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                           <div>
-                            <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{app.name}</p>
+                            <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{app.name} <span style={{ fontWeight: 'normal', color: '#777' }}>({app.userType === 'teacher' ? '교사' : '학생'})</span></p>
                             <p style={{ margin: 0, color: '#555' }}>생년월일: {app.birthDate ? new Date(app.birthDate).toLocaleDateString('ko-KR') : '알 수 없음'}</p>
                             <p style={{ margin: 0, color: '#555' }}>성별: {app.gender || '미지정'}</p>
                             <p style={{ margin: 0, color: '#555' }}>상태: {app.status === 'pending' ? '대기' : app.status === 'accepted' ? '승인' : '거절'}</p>
@@ -2576,29 +2602,63 @@ function App() {
 
   const renderSearchSection = () => (
     <section>
-      {isAdminOrTeacher && (
-        <div style={{ marginBottom: '15px' }}>
-          <input
-            type="text"
-            placeholder="학생 이름을 입력하세요"
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            style={{ marginRight: '5px', padding: '8px' }}
-          />
-          <input
-            type="text"
-            placeholder="과목으로 필터링 (선택사항)"
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-            style={{ marginRight: '5px', padding: '8px' }}
-          />
-          <button onClick={() => { fetchStudent(); setShowStudentModal(true); }} disabled={loading} style={{ padding: '8px 16px' }}>
-            {loading ? '검색 중...' : '검색'}
+      {isAdmin ? (
+        <div style={{ marginBottom: '20px' }}>
+          <h3>전체 사용자 목록</h3>
+          <button onClick={fetchAllUsers} disabled={allUsersLoading} style={{ marginBottom: '10px', padding: '5px 10px', backgroundColor: allUsersLoading ? '#ccc' : '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: allUsersLoading ? 'not-allowed' : 'pointer' }}>
+            {allUsersLoading ? '로딩중...' : '새로고침'}
           </button>
+          {allUsersError && (
+            <p style={{ color: 'red', marginBottom: '10px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>
+              오류: {allUsersError}
+            </p>
+          )}
+          {allUsersLoading ? (
+            <p>사용자 데이터 로딩 중...</p>
+          ) : allUsers.length > 0 ? (
+            <ul style={{ listStyle: 'none', padding: 0, maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+              {allUsers.map(userItem => (
+                <li key={userItem._id} style={{ padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong>{userItem.username}</strong>
+                    <div style={{ color: '#555' }}>
+                      {userItem.userType === 'teacher' ? '교사' : userItem.userType === 'student' ? '학생' : userItem.userType === 'parent' ? '학부모' : '관리자'}
+                      {userItem.isAdmin ? ' • 관리자 권한' : ''}
+                    </div>
+                  </div>
+                  <div style={{ color: '#777', fontSize: '13px' }}>{userItem.email || ''}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>등록된 사용자가 없습니다.</p>
+          )}
         </div>
+      ) : (
+        isAdminOrTeacher && (
+          <div style={{ marginBottom: '15px' }}>
+            <input
+              type="text"
+              placeholder="학생 이름을 입력하세요"
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              style={{ marginRight: '5px', padding: '8px' }}
+            />
+            <input
+              type="text"
+              placeholder="과목으로 필터링 (선택사항)"
+              value={subjectFilter}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              style={{ marginRight: '5px', padding: '8px' }}
+            />
+            <button onClick={() => { fetchStudent(); setShowStudentModal(true); }} disabled={loading} style={{ padding: '8px 16px' }}>
+              {loading ? '검색 중...' : '검색'}
+            </button>
+          </div>
+        )
       )}
-      {/* studentData 여부와 관계없이 항상 표시 */}
-      {isAdminOrTeacher && !showStudentModal && (
+
+      {!isAdmin && isAdminOrTeacher && !showStudentModal && (
         <div style={{ marginBottom: '20px' }}>
           <h3>전체 학생 목록</h3>
           <button onClick={fetchAllStudents} disabled={allStudentsLoading} style={{ marginBottom: '10px', padding: '5px 10px', backgroundColor: allStudentsLoading ? '#ccc' : '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: allStudentsLoading ? 'not-allowed' : 'pointer' }}>

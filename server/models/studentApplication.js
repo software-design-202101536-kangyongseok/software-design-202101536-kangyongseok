@@ -16,6 +16,12 @@ const studentApplicationSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  userType: {
+    type: String,
+    enum: ['student', 'teacher'],
+    required: true,
+    default: 'student'
+  },
   email: String,
   profileImage: String,
   status: {
