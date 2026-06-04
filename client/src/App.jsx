@@ -86,6 +86,7 @@ function App() {
   const [allStudentsLoading, setAllStudentsLoading] = useState(false)
   const [allStudentsError, setAllStudentsError] = useState('')
   const [allUsers, setAllUsers] = useState([])
+  const [adminUserId, setAdminUserId] = useState(null)
   const [allUsersLoading, setAllUsersLoading] = useState(false)
   const [allUsersError, setAllUsersError] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
@@ -1052,6 +1053,11 @@ function App() {
       }
       const data = await response.json()
       setAllUsers(data)
+      // detect admin user's _id for self-delete actions
+      if (user && user.userType === 'admin') {
+        const found = data.find(u => u.isAdmin && u.username === user.username) || data.find(u => u.isAdmin)
+        setAdminUserId(found?._id || null)
+      }
       setAllUsersError('')
     } catch (err) {
       console.error('Error fetching all users:', err)
@@ -1091,6 +1097,36 @@ function App() {
     } catch (err) {
       console.error('Error deleting user:', err)
       setAllUsersError(err.message || 'Failed to delete user')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const handleDeleteSelf = async () => {
+    if (!adminUserId) {
+      setAllUsersError('관리자 ID를 찾을 수 없습니다.')
+      return
+    }
+
+    if (!window.confirm('정말로 본인 관리자 계정을 삭제하시겠습니까? 연결된 학생 및 학부모 계정도 함께 삭제됩니다.')) return
+
+    setDeleteLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/students/users/${adminUserId}/cascade`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to delete admin account')
+      }
+
+      // 로그아웃 및 상태 초기화
+      handleLogout()
+    } catch (err) {
+      console.error('Error deleting self:', err)
+      setAllUsersError(err.message || '관리자 삭제에 실패했습니다.')
     } finally {
       setDeleteLoading(false)
     }
@@ -1804,94 +1840,131 @@ function App() {
         </div>
       </div>
       <nav style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
-        <button 
-          onClick={() => {
-            if ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) {
-              setShowStudentModal(true)
-            } else {
-              setActiveTab('search')
-            }
-          }}
-          style={{ 
-            padding: '10px 20px',
-            border: 'none',
-            backgroundColor: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? '#2196F3' : '#f0f0f0',
-            color: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'white' : '#333',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '16px',
-            fontWeight: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'bold' : 'normal'
-          }}
-        >
-          {(user.userType === 'student' || user.userType === 'parent') && !showStudentModal ? '학생 정보' : '학생 검색'}
-        </button>
-        {(user.userType === 'student' || user.userType === 'parent') && (
-          <button 
-            onClick={() => setActiveTab('feedback')}
-            style={{ 
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: activeTab === 'feedback' ? '#2196F3' : '#f0f0f0',
-              color: activeTab === 'feedback' ? 'white' : '#333',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: activeTab === 'feedback' ? 'bold' : 'normal'
-            }}
-          >
-            피드백 보기
-          </button>
-        )}
-        {isAdminOrTeacher && (
-          <button 
-            onClick={() => setActiveTab('register')}
-            style={{ 
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: activeTab === 'register' ? '#2196F3' : '#f0f0f0',
-              color: activeTab === 'register' ? 'white' : '#333',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: activeTab === 'register' ? 'bold' : 'normal'
-            }}
-          >
-            학생 등록
-          </button>
-        )}
-        {(user.userType === 'teacher' || user.userType === 'admin' || user.userType === 'student' || user.userType === 'parent') && (
-          <button 
-            onClick={() => setActiveTab('counseling')}
-            style={{ 
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: activeTab === 'counseling' ? '#673AB7' : '#f0f0f0',
-              color: activeTab === 'counseling' ? 'white' : '#333',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: activeTab === 'counseling' ? 'bold' : 'normal'
-            }}
-          >
-            상담
-          </button>
-        )}
-        {isAdminOrTeacher && (
-          <button 
-            onClick={() => setActiveTab('settings')}
-            style={{ 
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: activeTab === 'settings' ? '#FF5722' : '#f0f0f0',
-              color: activeTab === 'settings' ? 'white' : '#333',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: activeTab === 'settings' ? 'bold' : 'normal'
-            }}
-          >
-            교사용 설정
-          </button>
+        {isAdmin ? (
+          <>
+            <button
+              onClick={() => setActiveTab('search')}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                backgroundColor: activeTab === 'search' ? '#2196F3' : '#f0f0f0',
+                color: activeTab === 'search' ? 'white' : '#333',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: activeTab === 'search' ? 'bold' : 'normal'
+              }}
+            >
+              사용자 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('register')}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                backgroundColor: activeTab === 'register' ? '#2196F3' : '#f0f0f0',
+                color: activeTab === 'register' ? 'white' : '#333',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: activeTab === 'register' ? 'bold' : 'normal'
+              }}
+            >
+              등록 신청 관리
+            </button>
+          </>
+        ) : (
+          <>
+            <button 
+              onClick={() => {
+                if ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) {
+                  setShowStudentModal(true)
+                } else {
+                  setActiveTab('search')
+                }
+              }}
+              style={{ 
+                padding: '10px 20px',
+                border: 'none',
+                backgroundColor: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? '#2196F3' : '#f0f0f0',
+                color: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'white' : '#333',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: activeTab === 'search' || ((user.userType === 'student' || user.userType === 'parent') && !showStudentModal) ? 'bold' : 'normal'
+              }}
+            >
+              {(user.userType === 'student' || user.userType === 'parent') && !showStudentModal ? '학생 정보' : '학생 검색'}
+            </button>
+            {(user.userType === 'student' || user.userType === 'parent') && (
+              <button 
+                onClick={() => setActiveTab('feedback')}
+                style={{ 
+                  padding: '10px 20px',
+                  border: 'none',
+                  backgroundColor: activeTab === 'feedback' ? '#2196F3' : '#f0f0f0',
+                  color: activeTab === 'feedback' ? 'white' : '#333',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: activeTab === 'feedback' ? 'bold' : 'normal'
+                }}
+              >
+                피드백 보기
+              </button>
+            )}
+            {isAdminOrTeacher && (
+              <button 
+                onClick={() => setActiveTab('register')}
+                style={{ 
+                  padding: '10px 20px',
+                  border: 'none',
+                  backgroundColor: activeTab === 'register' ? '#2196F3' : '#f0f0f0',
+                  color: activeTab === 'register' ? 'white' : '#333',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: activeTab === 'register' ? 'bold' : 'normal'
+                }}
+              >
+                학생 등록
+              </button>
+            )}
+            {(user.userType === 'teacher' || user.userType === 'admin' || user.userType === 'student' || user.userType === 'parent') && (
+              <button 
+                onClick={() => setActiveTab('counseling')}
+                style={{ 
+                  padding: '10px 20px',
+                  border: 'none',
+                  backgroundColor: activeTab === 'counseling' ? '#673AB7' : '#f0f0f0',
+                  color: activeTab === 'counseling' ? 'white' : '#333',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: activeTab === 'counseling' ? 'bold' : 'normal'
+                }}
+              >
+                상담
+              </button>
+            )}
+            {isAdminOrTeacher && (
+              <button 
+                onClick={() => setActiveTab('settings')}
+                style={{ 
+                  padding: '10px 20px',
+                  border: 'none',
+                  backgroundColor: activeTab === 'settings' ? '#FF5722' : '#f0f0f0',
+                  color: activeTab === 'settings' ? 'white' : '#333',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: activeTab === 'settings' ? 'bold' : 'normal'
+                }}
+              >
+                교사용 설정
+              </button>
+            )}
+          </>
         )}
       </nav>
             {activeTab === 'search' && renderSearchSection()}
@@ -2750,6 +2823,9 @@ function App() {
             <div style={{ marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowUserModal(false); setSelectedUser(null); }} style={{ padding: '8px 16px', backgroundColor: '#757575', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>닫기</button>
               <button onClick={handleDeleteUser} disabled={deleteLoading} style={{ padding: '8px 16px', backgroundColor: deleteLoading ? '#ccc' : '#F44336', color: 'white', border: 'none', borderRadius: '4px', cursor: deleteLoading ? 'not-allowed' : 'pointer' }}>{deleteLoading ? '삭제 중...' : '삭제'}</button>
+              {user && user.userType === 'admin' && selectedUser && adminUserId && String(selectedUser._id) === String(adminUserId) && (
+                <button onClick={handleDeleteSelf} disabled={deleteLoading} style={{ padding: '8px 16px', backgroundColor: '#b71c1c', color: 'white', border: 'none', borderRadius: '4px', cursor: deleteLoading ? 'not-allowed' : 'pointer' }}>자기 삭제 (연관 삭제)</button>
+              )}
             </div>
           </div>
         </div>

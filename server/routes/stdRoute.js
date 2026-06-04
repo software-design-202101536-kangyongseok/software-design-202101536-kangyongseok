@@ -2035,4 +2035,54 @@ stdRouter.delete('/users/:userId', async (req, res) => {
   }
 });
 
+// Cascade delete: delete user and if the user has a linked studentId,
+// delete that student and all related records and users linked to that student.
+stdRouter.delete('/users/:userId/cascade', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const validatedUserId = convertToObjectId(userId);
+    const user = await User.findById(validatedUserId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // If user has a linked studentId, delete the student and related data
+    if (user.studentId) {
+      const studentObjectId = convertToObjectId(user.studentId);
+      const student = await Student.findByIdAndDelete(studentObjectId);
+      if (student) {
+        await Promise.all([
+          Grade.deleteMany({ student: studentObjectId }),
+          Attendance.deleteMany({ student: studentObjectId }),
+          Feedback.deleteMany({ studentId: studentObjectId }),
+          Counseling.deleteMany({ studentId: studentObjectId }),
+          Notification.deleteMany({ studentId: studentObjectId }),
+          User.deleteMany({ studentId: studentObjectId }),
+          removeStudentBackup(studentObjectId),
+          removeBackupRecord(GradeBackup, 'serviceGradeId', studentObjectId),
+          removeBackupRecord(AttendanceBackup, 'serviceAttendanceId', studentObjectId),
+          removeBackupRecord(FeedbackBackup, 'serviceFeedbackId', studentObjectId),
+          removeBackupRecord(CounselingBackup, 'serviceCounselingId', studentObjectId),
+          removeBackupRecord(NotificationBackup, 'serviceNotificationId', studentObjectId),
+          removeBackupRecord(UserBackup, 'serviceUserId', studentObjectId)
+        ]);
+      }
+    }
+
+    // Finally delete the user itself (in case it wasn't covered above)
+    await User.findByIdAndDelete(validatedUserId);
+    await removeBackupRecord(UserBackup, 'serviceUserId', validatedUserId);
+
+    res.status(200).json({ message: 'User and related records deleted successfully' });
+  } catch (err) {
+    console.error('Error cascade-deleting user:', err);
+    res.status(500).json({ message: err.message || 'Failed to cascade delete user' });
+  }
+});
+
 module.exports = stdRouter;
